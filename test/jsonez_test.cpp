@@ -651,100 +651,170 @@ const char* test_create() {
 	return NULL;
 }
 
-const char* testbox() {
+// TODO
+// add to object
+// add to array
 
-	// just int works fine
-	const char* i = "+1234567";
-	size_t len = strlen(i);
-	char* end = 0;
-	const char* exp = i + len;
 
-	int32_t l = strtoll(i, &end, 10);
-	mu_assert(end == exp, "also not really sure");
-	mu_assert(errno == 0, "weird errno problem");
-	mu_assert(l == 1234567, "wtf");
+jsonez *jsonez_create_object(jsonez *parent, char *key) {
 
-	double d = strtod(i, &end);
-	mu_assert(end == exp, "also not really sure");
-	mu_assert(errno == 0, "weird errno problem");
-	mu_assert(d == 1234567, "double wtf");
-
-	// we assume that no string that may be a number
-	// contains any invalid charaters...
-	//actually, do we even need to do that?  Not really
-	//not if we are checking that the end location is correct.
-	//starting char is a number, find end, skip white, ',', etc until
-	//valid next char.  If there is anything weird in the nuber the end 
-	//pointers won't match!!!		
-
-	// now test parsing a double as int...
-	i = "123.456";
-	len = strlen(i);
-	end = 0;
-	errno = 0;
-	exp = strchr(i, '.');
-	l = strtoll(i, &end, 10);
-	mu_assert(end == exp, "end should point to decimal point");
-	mu_assert(errno == 0, "weird errno problem");
-	mu_assert(l == 123, "wtf");
-
-	// now test parsing a double as double...
-	i = "123.456";
-	len = strlen(i);
-	end = 0;
-	errno = 0;
-	exp = i + len;
-	d = strtod(i, &end);
-	mu_assert(end == exp, "end should point to decimal point");
-	mu_assert(errno == 0, "weird errno problem");
-	mu_assert(d == 123.456, "wtf");
-
-	// now test parsing a error as int...
-	i = "123.456e-2.3";
-	len = strlen(i);
-	end = 0;
-	errno = 0;
-	exp = strchr(i, '.');
-	l = strtoll(i, &end, 10);
-	mu_assert(end == exp, "end should point to decimal point");
-	mu_assert(errno == 0, "weird errno problem");
-	mu_assert(l == 123, "wtf");
-
-	// now test parsing a double as double...
-	i = "123.456e-2.3";
-	len = strlen(i);
-	end = 0;
-	errno = 0;
-	exp = i + len;
-	d = strtod(i, &end);
-	mu_assert(end != exp, "end should point to decimal point");
-	mu_assert(errno == 0, "weird errno problem");
-	mu_assert(d == 123.456e-2, "wtf");
-
-	return NULL;
+	jsonez *obj = jsonez_create(parent, key);
+	obj->type = JSON_OBJ;
+	return obj;
 
 }
+
+
+jsonez *jsonez_create_array(jsonez *parent, char *key) {
+
+	jsonez *obj = jsonez_create(parent, key);
+	obj->type = JSON_ARRAY;
+	return obj;
+
+}
+
+
+jsonez *jsonez_create_bool(jsonez *parent, char *key, bool value) {
+
+	jsonez *obj = jsonez_create(parent, key);
+	obj->type = JSON_BOOL;
+	obj->i = value;
+	return obj;
+
+}
+
+
+jsonez *jsonez_create_float(jsonez *parent, char *key, double value) {
+
+	jsonez *obj = jsonez_create(parent, key);
+	obj->type = JSON_FLOAT;
+	obj->d = value;
+	return obj;
+
+}
+
+
+jsonez *jsonez_create_int(jsonez *parent, char *key, int value) {
+
+	jsonez *obj = jsonez_create(parent, key);
+	obj->type = JSON_INT;
+	obj->i = value;
+	return obj;
+
+}
+
+
+jsonez *jsonez_create_string(jsonez *parent, char *key, char *value) {
+
+	// this needs to unescape the string because
+	// reading the strings in escapes them
+	// why is this so hard?
+	jsonez *obj = jsonez_create(parent, key);
+	obj->type = JSON_STRING;
+	// count neede chars with escaping
+	int size = 0;
+	char *p = value;
+	while(*p) {
+		size++;
+		switch(*p) {
+			case '"':
+			case '\\':
+			case '\b':
+			case '\f':
+			case '\n':
+			case '\r':
+			case '\t':
+				size++;
+				break;
+		}	
+		p++;
+	}
+
+	obj->s = (char *)calloc(size + 1, sizeof(char));
+	p = value;
+	char *dest = obj->s;
+	while (*p) {
+		switch(*p) {
+			case '"':
+			case '\\':
+			case '\b':
+			case '\f':
+			case '\n':
+			case '\r':
+			case '\t':
+				*dest++ = '\\';
+				break;
+		}	
+		*dest++ = *p++;
+	}
+
+	obj->s[size] = '\0';
+	return obj;
+
+}
+
+
+const char* testbox() {
+
+
+	// got some ideas about serializing json to a string
+	// a ctx object for stuff
+	// ctx.quote_keys = false;
+	// ctx.indent_spaces = 3;
+	// ctx.color_separator = false; // true = ':', false - '='
+	// ctx.root_object = true; // true = { } around json content
+	
+	// int32 jsonez_to_string(jsonez* json, char *buf = NULL, uint32 len = 0, jsonez_ctx *ctx = NULL);
+	//
+	// int32 result = jsonez_to_string(json); // just returns size of string buffer
+	// int32 result = jsonez_to_string(json, buf, len); // used default context
+	// int32 result = jsonez_to_string(json, buf, len, &ctx); // used custom context
+	// if the len of the buf is not big enough, return size needed.
+	// if (result > len) ERROR
+	//
+	//
+	
+#if 1
+
+	// simple way
+	jsonez *json = NULL; // create object
+
+	unsigned int size = jsonez_to_string(json); // just get size needed
+	char *string = (char *)malloc(size + 1);
+	unsigned int wrote = jsonez_to_string(json, string, size);
+	mu_assert(size == wrote, "No idea");
+	string[size] = '\0';  
+
+	// write string to file...
+
+	free(string);
+
+#endif
+
+	return NULL;
+}
+
 
 const char* all_tests() {
 
 	mu_suite_start();
-	//mu_run_test(testbox);
+	mu_run_test(testbox);
 
-	mu_run_test(test_parse_011);
-	mu_run_test(test_parse_010);
-	mu_run_test(test_parse_009);
-	mu_run_test(test_parse_008);
-	mu_run_test(test_parse_007);
-	mu_run_test(test_parse_006);
-	mu_run_test(test_parse_005);
-	mu_run_test(test_parse_004);
-	mu_run_test(test_parse_003);
-	mu_run_test(test_parse_002);
-	mu_run_test(test_parse_001);
-	mu_run_test(test_parse_empty_obj);
-	mu_run_test(test_parse_empty_string);
-	mu_run_test(test_create);
-	mu_run_test(test_single_obj);
+	//mu_run_test(test_parse_011);
+	//mu_run_test(test_parse_010);
+	//mu_run_test(test_parse_009);
+	//mu_run_test(test_parse_008);
+	//mu_run_test(test_parse_007);
+	//mu_run_test(test_parse_006);
+	//mu_run_test(test_parse_005);
+	//mu_run_test(test_parse_004);
+	//mu_run_test(test_parse_003);
+	//mu_run_test(test_parse_002);
+	//mu_run_test(test_parse_001);
+	//mu_run_test(test_parse_empty_obj);
+	//mu_run_test(test_parse_empty_string);
+	//mu_run_test(test_create);
+	//mu_run_test(test_single_obj);
 
 	return NULL;
 }
