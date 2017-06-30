@@ -36,7 +36,7 @@
 #define check_debug(A, M, ...) if(!(A)) { debug(M, ##__VA_ARGS__);\
     errno=0; goto error; }
 
-#define mu_suite_start() char *message = NULL
+#define mu_suite_start() const char *message = NULL
 
 #define mu_assert(test, message) if (!(test)) { log_err(message); return message; }
 #define mu_run_test(test) debug("\n-----%s", " " #test); \
@@ -46,7 +46,7 @@
     argc = 1; \
     debug("----- RUNNING: %s", argv[0]);\
     printf("----\nRUNNING: %s\n", argv[0]);\
-    char *result = name();\
+    const char *result = name();\
     if (result != 0) {\
         printf("FAILED: %s\n", result);\
     }\
@@ -60,7 +60,8 @@
 static int tests_run;
 
 #define JSONEZ_IMPLEMENTATION
-#include "tmw_jsonez.h"
+#include "../jsonez.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Testing stuff
@@ -69,7 +70,148 @@ static int tests_run;
 // Test finding stuff
 // test escaped string for keys and values
 
-char* test_parse_008() {
+const char *test_parse_011() {
+
+	const char* file = R"(
+		/* multil
+		 * 
+		 * oh yeah babh //
+		 *  /
+		k0 = { 
+		}, // comment
+	)";
+	size_t len = strlen(file);
+	char* buf = (char*)calloc(len+1, sizeof(char));
+	strncpy(buf, file, len);
+	buf[len] = '\0';
+	char* p = buf;
+
+	jsonez* json = jsonez_parse(p);
+	mu_assert(json == NULL, "Should get nothing back");
+
+	return NULL;
+
+
+}
+ 
+const char *test_parse_010() {
+
+	const char* file = R"(
+		/* multil
+ * 
+ * oh yeah babh //
+ */
+		// comment // comment
+		k0 = { // comment
+			k1 = { // comment
+				n="v" // comment
+			}, // comment
+			k2= [{ // comment
+				s=42 // comment
+			},{ // comment
+				p=false, // comment
+			}], // comment
+			v /*whas...*/:123, /* asdf */
+		}, // comment
+	)";
+	size_t len = strlen(file);
+	char* buf = (char*)calloc(len+1, sizeof(char));
+	strncpy(buf, file, len);
+	buf[len] = '\0';
+	char* p = buf;
+
+	jsonez* json = jsonez_parse(p);
+	mu_assert(json, "Should get something back");
+	mu_assert(json->type == JSON_OBJ, "Should be an object");
+
+	return NULL;
+
+
+}
+
+
+const char* test_parse_009() {
+	const char* file = R"(
+		k0 = {
+			k1 = {
+				n="v"
+			},
+			k2= [{
+				s=42
+			},{
+				p=false,
+			}]
+		},
+	)";
+	size_t len = strlen(file);
+	char* buf = (char*)calloc(len+1, sizeof(char));
+	strncpy(buf, file, len);
+	buf[len] = '\0';
+	char* p = buf;
+
+	jsonez* json = jsonez_parse(p);
+	mu_assert(json, "Should get something back");
+	mu_assert(json->type == JSON_OBJ, "Should be an object");
+
+	jsonez* child = json->child;
+	mu_assert(child, "Should have a child");
+	mu_assert(child->type == JSON_OBJ, "Should be an object");
+	mu_assert(!strcmp(child->key,"k0"), " wrong key name?");
+	mu_assert(child->next == 0, "should only be one");
+	mu_assert(child->i == 2, "should only be two");
+
+	child = child->child;
+	mu_assert(child, "Should have a child");
+	mu_assert(child->type == JSON_OBJ, "Should be an object");
+	mu_assert(!strcmp(child->key,"k1"), " wrong key name?");
+	mu_assert(child->next, "should be another one");
+	mu_assert(child->i == 1, "should only be one");
+
+	jsonez* tmp = child->child;
+	mu_assert(tmp, "Should have a child");
+	mu_assert(tmp->type == JSON_STRING, "Should be an string");
+	mu_assert(!strcmp(tmp->key,"n"), " wrong key name?");
+	mu_assert(!strcmp(tmp->s,"v"), " wrong value");
+	mu_assert(!tmp->next, "should not be another one");
+
+	jsonez* next = child->next;
+	mu_assert(next, "Should have a child");
+	mu_assert(next->type == JSON_ARRAY, "Should be an array");
+	mu_assert(!strcmp(next->key,"k2"), " wrong key name?");
+	mu_assert(!next->next, "should not be another one");
+	mu_assert(next->i == 2, "array has two items");
+
+	next = next->child;
+	mu_assert(next, "Should have a child");
+	mu_assert(next->type == JSON_OBJ, "Should be an array");
+	mu_assert(next->next, "should be another one");
+	mu_assert(next->i == 1, "array has one items");
+
+	tmp = next->child;
+	mu_assert(tmp, "Should have a child");
+	mu_assert(tmp->type == JSON_INT, "Should be an string");
+	mu_assert(!strcmp(tmp->key,"s"), " wrong key name?");
+	mu_assert(tmp->i == 42, " wrong value");
+	mu_assert(!tmp->next, "should not be another one");
+
+	next = next->next;
+	mu_assert(next, "Should have a child");
+	mu_assert(next->type == JSON_OBJ, "Should be an array");
+	mu_assert(!next->next, "should be the last one");
+	mu_assert(next->i == 1, "array has one items");
+
+	tmp = next->child;
+	mu_assert(tmp, "Should have a child");
+	mu_assert(tmp->type == JSON_BOOL, "Should be an string");
+	mu_assert(!strcmp(tmp->key,"p"), " wrong key name?");
+	mu_assert(tmp->i == 0, " wrong value");
+	mu_assert(!tmp->next, "should not be another one");
+
+	return NULL;
+
+}
+
+const char* test_parse_008() {
 
 	const char* file = R"(
 		k0: {
@@ -151,7 +293,7 @@ char* test_parse_008() {
 
 }
 
-char* test_parse_007() {
+const char* test_parse_007() {
 
 	const char* file = R"(k0:[{s:42}])";
 
@@ -169,7 +311,7 @@ char* test_parse_007() {
 
 }
 
-char* test_parse_006() {
+const char* test_parse_006() {
 
 	const char* file = R"(key:"value")";
 	size_t len = strlen(file);
@@ -189,7 +331,7 @@ char* test_parse_006() {
 	return NULL;
 }
 
-char* test_parse_005() {
+const char* test_parse_005() {
 
 	const char* file = R"(
 		key:[]
@@ -207,7 +349,7 @@ char* test_parse_005() {
 
 }
 
-char* test_parse_004() {
+const char* test_parse_004() {
 
 	const char* file = R"(
 		key0: "value",
@@ -264,7 +406,7 @@ char* test_parse_004() {
 
 }
 
-char* test_parse_003() {
+const char* test_parse_003() {
 
 	const char* file = R"(
 		"key0": "value",
@@ -321,7 +463,7 @@ char* test_parse_003() {
 
 }
 
-char* test_parse_002() {
+const char* test_parse_002() {
 
 	const char* file = R"(
 		{
@@ -380,7 +522,7 @@ char* test_parse_002() {
 
 }
 
-char* test_parse_001() {
+const char* test_parse_001() {
 
 	const char* file = R"(
 		{
@@ -439,7 +581,7 @@ char* test_parse_001() {
 
 }
 
-char* test_parse_empty_string() {
+const char* test_parse_empty_string() {
 
 	const char* file = R"(
 		    
@@ -459,7 +601,7 @@ char* test_parse_empty_string() {
 
 }
 
-char* test_parse_empty_obj() {
+const char* test_parse_empty_obj() {
 
 	const char* file = R"(
 		{  }
@@ -479,7 +621,7 @@ char* test_parse_empty_obj() {
 
 }
 
-char* test_single_obj() {
+const char* test_single_obj() {
 	const char* file = R"(
 		{ "key":"value" }
 	)";
@@ -496,7 +638,7 @@ char* test_single_obj() {
 	return NULL;
 }
 
-char* test_create() {
+const char* test_create() {
 	const char* file = R"(
 		{ }
 	)";
@@ -509,7 +651,7 @@ char* test_create() {
 	return NULL;
 }
 
-char* testbox() {
+const char* testbox() {
 
 	// just int works fine
 	const char* i = "+1234567";
@@ -583,11 +725,14 @@ char* testbox() {
 
 }
 
-char* all_tests() {
+const char* all_tests() {
 
 	mu_suite_start();
 	//mu_run_test(testbox);
 
+	mu_run_test(test_parse_011);
+	mu_run_test(test_parse_010);
+	mu_run_test(test_parse_009);
 	mu_run_test(test_parse_008);
 	mu_run_test(test_parse_007);
 	mu_run_test(test_parse_006);

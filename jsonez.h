@@ -21,8 +21,10 @@
 
 */
 
+
 #ifndef INCLUDE_JSONEZ_H
 #define INCLUDE_JSONEZ_H
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,11 +37,13 @@ extern "C" {
 #define JSONEZDEF extern
 #endif
 
+
 #ifndef JSON_REPORT_ERROR
 #define JSON_REPORT_ERROR(msg, p) fprintf(stderr, "PARSE ERROR (%d): " msg " at %s\n", __LINE__, p)
 #endif
 
-enum jsonez_type {
+
+typedef enum jsonez_type {
 	JSON_UNKNOWN,
 	JSON_OBJ,
 	JSON_ARRAY,
@@ -47,30 +51,31 @@ enum jsonez_type {
 	JSON_INT,
 	JSON_FLOAT,
 	JSON_BOOL,
-};
+} jsonez_type;
 
 
-struct jsonez {
+typedef struct jsonez {
 	jsonez_type type;
-	char* key;
+	char *key;
 	union {
-		char* s; // string 
+		char *s; // string 
 		int i; // int, boolean, or count
 		double d; // double 
 	};
-	jsonez* next;
-	jsonez* child;
-};
+	struct jsonez *next;
+	struct jsonez *child;
+} jsonez;
 
 
-JSONEZDEF jsonez* jsonez_parse(char* file);
-JSONEZDEF jsonez* jsonez_find(jsonez* parent, const char* key);
-JSONEZDEF void jsonez_free(jsonez* json);
+JSONEZDEF jsonez *jsonez_parse(char *file);
+JSONEZDEF jsonez *jsonez_find(jsonez *parent, const char *key);
+JSONEZDEF void jsonez_free(jsonez *json);
 
 
 #ifdef __cplusplus
 }
 #endif
+
 
 #endif // INCLUDE_JSONEZ_H
 
@@ -101,22 +106,53 @@ JSONEZDEF void jsonez_free(jsonez* json);
 #define JSONEZ_ESCAPE(c) ((c)=='"'||(c)=='\\'||(c)=='/'||(c)=='b'||(c)=='f'||(c)=='n'||(c)=='r'||(c)=='t')
 #define JSONEZ_VALID_STRING(c) (JSONEZ_BETWEEN((c),' ','~'))
 #define JSONEZ_NUMBER(c) (JSONEZ_BETWEEN((c),'0','9')||(c)=='e'||(c)=='E'||(c)=='+'||(c)=='-'||(c)=='.')
-
 #define JSONEZ_SKIP_WHITESPACE(p) while( (p) && *(p) && JSONEZ_WHITESPACE(*(p))) { (p)++; }
+#define JSONEZ_IS_SINGLE_COMMENT(p) (p && (*p) && (*p=='/') && (*(p+1)) && (*(p+1)=='/'))
+#define JSONEZ_IS_MULTI_COMMENT(p) (p && (*p) && (*p=='/') && (*(p+1)) && (*(p+1)=='*'))
 
 
-static char* jsonez_parse_object(jsonez* parent, char* p);
+static char *jsonez_parse_object(jsonez *parent, char *p);
 
-static jsonez* jsonez_create(jsonez*parent, char* key) {
 
-	jsonez* json = (jsonez*)calloc(1, sizeof(jsonez));
+static char *jsonez_skip_whitespace(char *p) {
+	JSONEZ_SKIP_WHITESPACE(p);
+	while (JSONEZ_IS_SINGLE_COMMENT(p) || JSONEZ_IS_MULTI_COMMENT(p)) {
+		if (JSONEZ_IS_SINGLE_COMMENT(p)) {
+			while(*p && (*p != '\n')) {
+				++p;
+			}
+			if (p == NULL || *p != '\n') {
+				JSON_REPORT_ERROR("malformed single line comment", p);
+			}
+		} else if (JSONEZ_IS_MULTI_COMMENT(p)) {
+			bool end = false;
+			while (*p) {
+				bool maybe = *p++ == '*';
+				if (maybe && (*p++ == '/')) {
+					end = true;
+					break;
+				}
+			}
+			if (!end) {
+				JSON_REPORT_ERROR("malformed /* */ multiline comment", p);
+			}
+		}
+		JSONEZ_SKIP_WHITESPACE(p);
+	}
+	return p;
+}
+
+
+static jsonez *jsonez_create(jsonez *parent, char *key) {
+
+	jsonez *json = (jsonez *)calloc(1, sizeof(jsonez));
 	json->type = JSON_UNKNOWN;
 	json->key = key;
 
 	if(!parent->child) {
 		parent->child = json;
 	} else {
-		jsonez* child = parent->child;
+		jsonez *child = parent->child;
 		while(child->next) {
 			child = child->next;
 		}
@@ -127,27 +163,29 @@ static jsonez* jsonez_create(jsonez*parent, char* key) {
 	return json;
 }
 
-static char* jsonez_next_arr(char* p) {
 
-	JSONEZ_SKIP_WHITESPACE(p);
+static char *jsonez_next_arr(char *p) {
+
+	p = jsonez_skip_whitespace(p);
 
 	if(*p==',') {
 		p++;
 	}
 
-	JSONEZ_SKIP_WHITESPACE(p);
+	p = jsonez_skip_whitespace(p);
 
 	if(*p==']') return p;
 	if(*p=='{'||*p=='['||*p=='"'||*p=='t'||*p=='f'||JSONEZ_NUMBER(*p)) return p;
 
-	JSON_REPORT_ERROR("Neverending Array bro!",p);
+	JSON_REPORT_ERROR("Neverending Array",p);
 	return 0; // error of some king
 
 }
 
-static char* jsonez_next_obj(char* p) {
 
-	JSONEZ_SKIP_WHITESPACE(p);
+static char *jsonez_next_obj(char *p) {
+
+	p = jsonez_skip_whitespace(p);
 
 	if(*p=='\0') return p;
 	if(*p=='}'||*p==']') return p;
@@ -159,7 +197,7 @@ static char* jsonez_next_obj(char* p) {
 		return 0; //error of some king
 	}
 
-	JSONEZ_SKIP_WHITESPACE(p);
+	p = jsonez_skip_whitespace(p);
 
 	if(*p=='\0') return p;
 	if(*p=='}'||*p==']') return p;
@@ -170,18 +208,19 @@ static char* jsonez_next_obj(char* p) {
 
 }
 
-static char* jsonez_skip_key_separator(char* p) {
 
-	JSONEZ_SKIP_WHITESPACE(p);
+static char *jsonez_skip_key_separator(char *p) {
 
-	if(*p==':') {
+	p = jsonez_skip_whitespace(p);
+
+	if(*p==':' || *p=='=') {
 		p++;
 	} else {
 		JSON_REPORT_ERROR("Missing ':' key separator",p);
 		return 0; // error of some kind
 	}
 
-	JSONEZ_SKIP_WHITESPACE(p);
+	p = jsonez_skip_whitespace(p);
 
 	if(*p=='"'||*p=='t'||*p=='f'||JSONEZ_NUMBER(*p)||*p=='['||*p=='{') return p;
 
@@ -190,9 +229,10 @@ static char* jsonez_skip_key_separator(char* p) {
 
 }
 
-static char* jsonez_parse_quote_string(char** key, char* p) {
 
-	char* s = p;
+static char *jsonez_parse_quote_string(char **key, char *p) {
+
+	char *s = p;
 	int len = 0;
 	char c = 0;
 
@@ -217,8 +257,8 @@ static char* jsonez_parse_quote_string(char** key, char* p) {
 		// actually return good string
 		// the len is not the actual length of the string
 		// but the escaped length
-		char* str = (char*)calloc(len+1, sizeof(char));
-		char* d = str;
+		char *str = (char*)calloc(len+1, sizeof(char));
+		char *d = str;
 		for(int i = 0; i < len; ++i) {
 			if(*++s == '\\') {
 				switch(*++s) {
@@ -264,9 +304,10 @@ static char* jsonez_parse_quote_string(char** key, char* p) {
 	return 0;
 }
 
-static char* jsonez_parse_raw_key(char** key, char* p) {
 
-	char* s = p;
+static char *jsonez_parse_raw_key(char **key, char *p) {
+
+	char *s = p;
 	int len = 0;
 
 	while(*p && JSONEZ_RAW_KEY(*p)) {
@@ -274,11 +315,11 @@ static char* jsonez_parse_raw_key(char** key, char* p) {
 		len++;
 	}
 
-	JSONEZ_SKIP_WHITESPACE(p);
+	p = jsonez_skip_whitespace(p);
 
-	if(*p == ':') {
+	if(*p == ':' || *p == '=') {
 		// got a key
-		char* str = (char*)calloc(len+1, sizeof(char));		
+		char *str = (char *)calloc(len+1, sizeof(char));		
 		strncpy(str, s, len);
 		str[len] = '\0';
 		*key = str;
@@ -289,9 +330,10 @@ static char* jsonez_parse_raw_key(char** key, char* p) {
 	return 0;
 }
 
-static char* jsonez_parse_bool_value(jsonez* parent, char* key, char* p) {
 
-	jsonez* json = jsonez_create(parent, key);
+static char *jsonez_parse_bool_value(jsonez *parent, char *key, char *p) {
+
+	jsonez *json = jsonez_create(parent, key);
 
 	char c=*p++;
 	if(c=='t') {
@@ -323,9 +365,10 @@ static char* jsonez_parse_bool_value(jsonez* parent, char* key, char* p) {
 
 }
 
-static char* jsonez_parse_number_value(jsonez* parent, char* key, char* p) {
 
-	jsonez* json = jsonez_create(parent, key);
+static char *jsonez_parse_number_value(jsonez *parent, char *key, char *p) {
+
+	jsonez *json = jsonez_create(parent, key);
 	char* s = p;	
 	char* e = 0;
 
@@ -336,7 +379,7 @@ static char* jsonez_parse_number_value(jsonez* parent, char* key, char* p) {
 
 	// try parse int
 	errno = 0;
-	char* ee;
+	char *ee;
 	int i = strtol(s, &ee, 10);
 	if( errno == 0 && ((e+1) == ee) ) {
 		json->type = JSON_INT;
@@ -359,9 +402,10 @@ static char* jsonez_parse_number_value(jsonez* parent, char* key, char* p) {
 
 }
 
-static char* jsonez_parse_string_value(jsonez* parent, char* key, char* p) {
 
-	jsonez* json = jsonez_create(parent, key);
+static char *jsonez_parse_string_value(jsonez *parent, char *key, char *p) {
+
+	jsonez *json = jsonez_create(parent, key);
 	p = jsonez_parse_quote_string(&json->s, p);
 	if(p) {
 		json->type = JSON_STRING;
@@ -372,9 +416,10 @@ static char* jsonez_parse_string_value(jsonez* parent, char* key, char* p) {
 
 }
 
-static char* jsonez_parse_array(jsonez* parent, char* p) {
 
-	JSONEZ_SKIP_WHITESPACE(p);
+static char *jsonez_parse_array(jsonez *parent, char *p) {
+
+	p = jsonez_skip_whitespace(p);
 
 	while(*p) {
 
@@ -408,9 +453,10 @@ static char* jsonez_parse_array(jsonez* parent, char* p) {
 
 }
 
-static char* jsonez_parse_object(jsonez* parent, char* p) {
 
-	JSONEZ_SKIP_WHITESPACE(p);
+static char *jsonez_parse_object(jsonez *parent, char *p) {
+
+	p = jsonez_skip_whitespace(p);
 
 	while(*p) {
 
@@ -419,7 +465,7 @@ static char* jsonez_parse_object(jsonez* parent, char* p) {
 			return p+1;
 		}
 
-		char* key = 0;
+		char *key = 0;
 		if(JSONEZ_RAW_KEY(*p)) {
 			p = jsonez_parse_raw_key(&key, p);
 		} else if(*p=='"') {
@@ -457,13 +503,14 @@ static char* jsonez_parse_object(jsonez* parent, char* p) {
 
 }
 
-static char* json_parse_root(jsonez* parent, char* p) {
 
-	JSONEZ_SKIP_WHITESPACE(p);
+static char *json_parse_root(jsonez *parent, char *p) {
+
+	p = jsonez_skip_whitespace(p);
 
 	while(*p) {
 
-		char* key = 0;
+		char *key = 0;
 		if(JSONEZ_RAW_KEY(*p)) {
 			p = jsonez_parse_raw_key(&key, p);
 		} else if(*p=='"') {
@@ -505,9 +552,10 @@ static char* json_parse_root(jsonez* parent, char* p) {
 
 }
 
-JSONEZDEF void jsonez_free(jsonez* json) {
-	jsonez* p = json->child;
-	jsonez* p1;
+
+JSONEZDEF void jsonez_free(jsonez *json) {
+	jsonez *p = json->child;
+	jsonez *p1;
 	while(p) {
 		p1 = p->next;
 		jsonez_free(p);
@@ -516,13 +564,14 @@ JSONEZDEF void jsonez_free(jsonez* json) {
 	free(json);
 }
 
-JSONEZDEF jsonez* jsonez_parse(char* file) {
 
-	jsonez* json = (jsonez*)calloc(1, sizeof(jsonez));
+JSONEZDEF jsonez *jsonez_parse(char *file) {
+
+	jsonez *json = (jsonez*)calloc(1, sizeof(jsonez));
 	
-	char* p = file;
+	char *p = file;
 	
-	JSONEZ_SKIP_WHITESPACE(p);
+	p = jsonez_skip_whitespace(p);
 
 	if(*p=='{') {
 		p = jsonez_parse_object(json, p+1);
@@ -530,7 +579,7 @@ JSONEZDEF jsonez* jsonez_parse(char* file) {
 		p = json_parse_root(json, p);	
 	}
 
-	JSONEZ_SKIP_WHITESPACE(p);
+	p = jsonez_skip_whitespace(p);
 
 	if(p && (*p == '\0')) {
 		json->type = JSON_OBJ;
@@ -543,11 +592,12 @@ JSONEZDEF jsonez* jsonez_parse(char* file) {
 
 }
 
-JSONEZDEF jsonez* jsonez_find(jsonez* parent, const char* key) {
+
+JSONEZDEF jsonez *jsonez_find(jsonez *parent, const char *key) {
 	
 	if( !parent ) return NULL;
 
-	jsonez* next = parent->next;
+	jsonez *next = parent->next;
 	while(next) {
 		if(!strcmp(key, next->key)) {
 			return next;
@@ -557,7 +607,6 @@ JSONEZDEF jsonez* jsonez_find(jsonez* parent, const char* key) {
 	return NULL;
 
 }
-
 
 
 #endif // JSONEZ_IMPLEMENTATION
@@ -572,29 +621,14 @@ JSONEZDEF jsonez* jsonez_find(jsonez* parent, const char* key) {
 	Anyone is free to copy, modify, publish, use, compile, sell, or distribute this 
 	software, either in source code form or as a compiled binary, for any purpose, 
 	commercial or non-commercial, and by any means.
+
 	In jurisdictions that recognize copyright laws, the author or authors of this 
 	software dedicate any and all copyright interest in the software to the public 
 	domain. We make this dedication for the benefit of the public at large and to 
 	the detriment of our heirs and successors. We intend this dedication to be an 
 	overt act of relinquishment in perpetuity of all present and future rights to 
 	this software under copyright law.
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
-	AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN 
-	ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION 
-	WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-	Public Domain (www.unlicense.org)
-	This is free and unencumbered software released into the public domain.
-	Anyone is free to copy, modify, publish, use, compile, sell, or distribute this 
-	software, either in source code form or as a compiled binary, for any purpose, 
-	commercial or non-commercial, and by any means.
-	In jurisdictions that recognize copyright laws, the author or authors of this 
-	software dedicate any and all copyright interest in the software to the public 
-	domain. We make this dedication for the benefit of the public at large and to 
-	the detriment of our heirs and successors. We intend this dedication to be an 
-	overt act of relinquishment in perpetuity of all present and future rights to 
-	this software under copyright law.
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
