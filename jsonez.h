@@ -79,7 +79,6 @@ JSONEZDEF jsonez *jsonez_parse(char *file);
 JSONEZDEF jsonez *jsonez_find(jsonez *parent, const char *key);
 JSONEZDEF void jsonez_free(jsonez *json);
 
-JSONEZDEF unsigned int jsonez_to_string(jsonez *root, char *string = 0, unsigned int len = 0, jsonez_ctx *ctx = 0);
 
 #ifdef __cplusplus
 }
@@ -613,12 +612,6 @@ JSONEZDEF jsonez *jsonez_find(jsonez *parent, const char *key) {
 	return NULL;
 
 }
-
-
-JSONEZDEF unsigned int jsonez_to_string(jsonez *root, char *string, unsigned int len, jsonez_ctx *ctx) {
-	return 0;
-}
-
 
 
 #endif // JSONEZ_IMPLEMENTATION

@@ -70,6 +70,12 @@ static int tests_run;
 // Test finding stuff
 // test escaped string for keys and values
 
+// TODO
+// --------------------
+// need tests for json2string stuff
+
+
+
 const char *test_parse_011() {
 
 	const char* file = R"(
@@ -94,6 +100,7 @@ const char *test_parse_011() {
 
 }
  
+
 const char *test_parse_010() {
 
 	const char* file = R"(
@@ -211,6 +218,7 @@ const char* test_parse_009() {
 
 }
 
+
 const char* test_parse_008() {
 
 	const char* file = R"(
@@ -293,6 +301,7 @@ const char* test_parse_008() {
 
 }
 
+
 const char* test_parse_007() {
 
 	const char* file = R"(k0:[{s:42}])";
@@ -331,6 +340,7 @@ const char* test_parse_006() {
 	return NULL;
 }
 
+
 const char* test_parse_005() {
 
 	const char* file = R"(
@@ -348,6 +358,7 @@ const char* test_parse_005() {
 	return NULL;
 
 }
+
 
 const char* test_parse_004() {
 
@@ -406,6 +417,7 @@ const char* test_parse_004() {
 
 }
 
+
 const char* test_parse_003() {
 
 	const char* file = R"(
@@ -462,6 +474,7 @@ const char* test_parse_003() {
 	return NULL;
 
 }
+
 
 const char* test_parse_002() {
 
@@ -522,6 +535,7 @@ const char* test_parse_002() {
 
 }
 
+
 const char* test_parse_001() {
 
 	const char* file = R"(
@@ -581,6 +595,7 @@ const char* test_parse_001() {
 
 }
 
+
 const char* test_parse_empty_string() {
 
 	const char* file = R"(
@@ -600,6 +615,7 @@ const char* test_parse_empty_string() {
 	return NULL;
 
 }
+
 
 const char* test_parse_empty_obj() {
 
@@ -621,6 +637,7 @@ const char* test_parse_empty_obj() {
 
 }
 
+
 const char* test_single_obj() {
 	const char* file = R"(
 		{ "key":"value" }
@@ -638,6 +655,7 @@ const char* test_single_obj() {
 	return NULL;
 }
 
+
 const char* test_create() {
 	const char* file = R"(
 		{ }
@@ -651,9 +669,14 @@ const char* test_create() {
 	return NULL;
 }
 
-// TODO
-// add to object
-// add to array
+
+jsonez *jsonez_create_root() {
+
+	jsonez *obj = (jsonez *)calloc(1, sizeof(jsonez));
+	obj->type = JSON_OBJ;
+	return obj;
+
+}
 
 
 jsonez *jsonez_create_object(jsonez *parent, char *key) {
@@ -753,43 +776,337 @@ jsonez *jsonez_create_string(jsonez *parent, char *key, char *value) {
 
 }
 
+// this is the thing we pass
+// around to collect all the len
+// and other stuff
+// jsonez_output
+typedef struct jsonez_output {
+
+	char *ptr;
+	int total = 0;
+	int remaining;
+
+} jsonez_output;
+
+
+#define WRITE_STRING(stf, fmt, ...) do { \
+	int written = snprintf(stf->ptr, stf->remaining, fmt, ##__VA_ARGS__); \
+	stf->total += written; \
+	if (stf->ptr) stf->ptr += written; \
+	stf->remaining -= written; \
+	if (stf->remaining < 0) stf->remaining = 0; \
+} while(0)
+
+
+void print_error(jsonez *obj) {
+	printf("ERROR!!!\n");
+}
+
+
+void print_key_value(jsonez_output *out, int space, jsonez *obj, jsonez_ctx *ctx);
+void print_value(jsonez_output *out, int space, jsonez *value, jsonez_ctx *ctx);
+
+
+void print_array_values(jsonez_output *out, int space, jsonez *obj, jsonez_ctx *ctx) {
+
+	WRITE_STRING(out, " [");
+	jsonez *arr_obj = obj->child;
+	if (arr_obj) {
+		print_value(out, space, arr_obj, ctx);
+		while(arr_obj->next) {
+			arr_obj = arr_obj->next;
+			WRITE_STRING(out, ", ");
+			print_value(out, space, arr_obj, ctx);
+		}
+	}
+	WRITE_STRING(out, "]");
+}
+
+
+void print_object_values(jsonez_output *out, int space, jsonez *obj, jsonez_ctx *ctx) {
+	WRITE_STRING(out, "{\n");
+	if (obj) {
+		jsonez *child = obj->child;
+		if (child) {
+			print_key_value(out, space + ctx->indent_length, child, ctx);
+			while(child->next) {
+				WRITE_STRING(out, ",\n");
+				child = child->next;
+				print_key_value(out, space + ctx->indent_length, child, ctx);
+			}
+		}
+	}
+	WRITE_STRING(out, "\n%*s}", space, "");
+}
+
+
+bool is_key_raw(char *key) {
+	while(key && *key) {
+		if (!JSONEZ_RAW_KEY(*key)) {
+			return false;
+		}
+		key++;
+	}
+	return true;
+}
+
+
+void write_key_value(jsonez_output *out, int space, jsonez *obj, jsonez_ctx *ctx) {
+	const char *separator = ctx->use_equal_sign ? " = " : ": ";
+	if (ctx->quote_keys || !is_key_raw(obj->key)) {
+		WRITE_STRING(out, "%*s\"%s\"%s", space, "", obj->key, separator);
+	} else {
+		WRITE_STRING(out, "%*s%s%s", space, "", obj->key, separator);
+	}
+}
+
+
+void print_key_value(jsonez_output *out, int space, jsonez *obj, jsonez_ctx *ctx) {
+	if(obj) {
+		switch(obj->type) {
+			case JSON_INT: {
+				write_key_value(out, space, obj, ctx);
+				WRITE_STRING(out, "%d", obj->i);
+			} break;
+			case JSON_FLOAT: {
+				write_key_value(out, space, obj, ctx);
+				WRITE_STRING(out, "%f", obj->d); 
+		   } break;
+			case JSON_STRING:{
+				write_key_value(out, space, obj, ctx);
+		   	WRITE_STRING(out, "\"%s\"", obj->s);
+			} break;
+			case JSON_BOOL: {
+				write_key_value(out, space, obj, ctx);
+				WRITE_STRING(out, "%s", obj->i ? "true" : "false"); 
+			} break;
+			case JSON_ARRAY: {
+				write_key_value(out, space, obj, ctx);
+				print_array_values(out, space, obj, ctx);
+		   } break;
+			case JSON_OBJ: {
+				write_key_value(out, space, obj, ctx);
+			  	print_object_values(out, space, obj, ctx);
+		   } break;
+			default: print_error(obj); return;
+		}
+	}
+}
+
+
+void print_value(jsonez_output *out, int space, jsonez *value, jsonez_ctx *ctx) {
+	if(value) {
+		switch(value->type) {
+			case JSON_INT: WRITE_STRING(out, "%d", value->i); break;
+			case JSON_FLOAT: WRITE_STRING(out, "%f", value->d); break;
+			case JSON_STRING: WRITE_STRING(out, "\"%s\"", value->s); break;
+			case JSON_BOOL: WRITE_STRING(out, "%s", value->i ? "true" : "false"); break;
+			case JSON_ARRAY: print_array_values(out, space, value, ctx); break;
+			case JSON_OBJ: print_object_values(out, space, value, ctx); break;
+			default: print_error(value); return;
+		}
+	}
+}
+
+
+// this should just be something like
+void jsonez_root_to_string(jsonez_output *out, jsonez *root, jsonez_ctx *ctx) {
+	jsonez *start = root->child;
+	if (ctx->add_root_object) WRITE_STRING(out, "{\n");
+	if (start) {
+		int indent = ctx->add_root_object ? ctx->indent_length : 0;
+		print_key_value(out, indent, start, ctx);
+		while(start->next) {
+			WRITE_STRING(out, ",\n");
+			start = start->next;
+			print_key_value(out, indent, start, ctx);
+		}
+	}
+	if (ctx->add_root_object) WRITE_STRING(out, "\n}\n");
+}
+
+
+JSONEZDEF char *jsonez_to_string(jsonez *root, jsonez_ctx *ctx = NULL);
+JSONEZDEF char *jsonez_to_string(jsonez *root, jsonez_ctx *ctx) {
+
+	jsonez_ctx default_ctx;
+	if (ctx == NULL) {
+		default_ctx.indent_length = 3;
+		default_ctx.add_root_object = true;
+		default_ctx.quote_keys = true;
+		default_ctx.use_equal_sign = false;
+		ctx = &default_ctx;
+	}
+
+	jsonez_output out;
+	out.total = 0;
+	out.ptr = NULL;
+	out.remaining = 0;
+
+	jsonez_root_to_string(&out, root, ctx);
+	char *string = (char *)calloc(out.total + 1, sizeof(char));
+
+	out.remaining = out.total;
+	out.total = 0;
+	out.ptr = string;
+	jsonez_root_to_string(&out, root, ctx);
+
+	string[out.total] = '\0';
+	return string;
+
+}
+
+
+const char *workit() {
+
+	// simple way
+	jsonez *root = jsonez_create_root();
+	jsonez_create_int(root, (char *)"int", 42);
+	jsonez_create_float(root, (char *)"float", 123.456);
+	jsonez_create_bool(root, (char *)"bool", false);
+	jsonez_create_string(root, (char *)"string", (char *)"Oh Yeah \"baby\"");
+	jsonez *arr = jsonez_create_array(root, (char *)"array");
+
+	for (int i = 0; i < 10; ++i) {
+		jsonez_create_int(arr, arr->key, i);
+	}
+
+	// let's try some nested objects...
+	jsonez *obj = jsonez_create_object(root, (char *)"grunt");
+	jsonez_create_int(obj, (char *)"int", 42);
+	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_bool(obj, (char *)"bool", false);
+	jsonez_create_string(obj, (char *)"string", (char *)"Oh Yeah \"baby\"");
+	arr = jsonez_create_array(obj, (char *)"array");
+	
+	for (int i = 0; i < 10; ++i) {
+		jsonez_create_int(arr, arr->key, i);
+	}
+
+	// let's try some nested objects...
+	obj = jsonez_create_object(root, (char *)"grunt");
+	jsonez_create_int(obj, (char *)"int", 42);
+	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_bool(obj, (char *)"bool", false);
+	jsonez_create_string(obj, (char *)"string", (char *)"Oh Yeah \"baby\"");
+	arr = jsonez_create_array(obj, (char *)"array");
+	
+	for (int i = 0; i < 10; ++i) {
+		jsonez_create_int(arr, arr->key, i);
+	}
+
+	// let's try some nested objects...
+	obj = jsonez_create_object(root, (char *)"grunt");
+	jsonez_create_int(obj, (char *)"int", 42);
+	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_bool(obj, (char *)"bool", false);
+	jsonez_create_string(obj, (char *)"string", (char *)"Oh Yeah \"baby\"");
+	arr = jsonez_create_array(obj, (char *)"array");
+	
+	for (int i = 0; i < 10; ++i) {
+		jsonez_create_int(arr, arr->key, i);
+	}
+
+	// arrays of objects?
+	arr = jsonez_create_array(root, (char *)"crazy town");
+	jsonez_create_object(root, (char *)"empty");
+
+	arr = jsonez_create_array(root, (char *)"groovy");
+	obj = jsonez_create_object(arr, arr->key);
+	jsonez_create_int(obj, (char *)"int", 42);
+	jsonez_create_float(obj, (char *)"float", 123.456);
+	obj = jsonez_create_object(arr, arr->key);
+	jsonez_create_int(obj, (char *)"int", 42);
+	jsonez_create_float(obj, (char *)"float", 123.456);
+	obj = jsonez_create_object(arr, arr->key);
+	jsonez_create_int(obj, (char *)"int", 42);
+	jsonez_create_float(obj, (char *)"float", 123.456);
+
+
+	jsonez_ctx ctx;
+	ctx.indent_length = 3;
+	ctx.use_equal_sign = true;
+	ctx.add_root_object = false;
+	ctx.quote_keys = false;
+	char *string = jsonez_to_string(root, &ctx);
+
+	printf("JSON:\n%s\n", string);
+
+	free(string);
+	jsonez_free(root);
+	return "poop";
+
+}
+
+
 
 const char* testbox() {
 
-
-	// got some ideas about serializing json to a string
-	// a ctx object for stuff
-	// ctx.quote_keys = false;
-	// ctx.indent_spaces = 3;
-	// ctx.color_separator = false; // true = ':', false - '='
-	// ctx.root_object = true; // true = { } around json content
-	
-	// int32 jsonez_to_string(jsonez* json, char *buf = NULL, uint32 len = 0, jsonez_ctx *ctx = NULL);
-	//
-	// int32 result = jsonez_to_string(json); // just returns size of string buffer
-	// int32 result = jsonez_to_string(json, buf, len); // used default context
-	// int32 result = jsonez_to_string(json, buf, len, &ctx); // used custom context
-	// if the len of the buf is not big enough, return size needed.
-	// if (result > len) ERROR
-	//
-	//
-	
-#if 1
-
 	// simple way
-	jsonez *json = NULL; // create object
+	jsonez *root = jsonez_create_root();
+	jsonez_create_int(root, (char *)"int", 42);
+	jsonez_create_float(root, (char *)"float", 123.456);
+	jsonez_create_bool(root, (char *)"bool", false);
+	jsonez_create_string(root, (char *)"string", (char *)"Oh Yeah \"baby\"");
+	jsonez *arr = jsonez_create_array(root, (char *)"array");
 
-	unsigned int size = jsonez_to_string(json); // just get size needed
-	char *string = (char *)malloc(size + 1);
-	unsigned int wrote = jsonez_to_string(json, string, size);
-	mu_assert(size == wrote, "No idea");
-	string[size] = '\0';  
+	for (int i = 0; i < 10; ++i) {
+		jsonez_create_int(arr, arr->key, i);
+	}
 
-	// write string to file...
+	// let's try some nested objects...
+	jsonez *obj = jsonez_create_object(root, (char *)"grunt");
+	jsonez_create_int(obj, (char *)"int", 42);
+	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_bool(obj, (char *)"bool", false);
+	jsonez_create_string(obj, (char *)"string", (char *)"Oh Yeah \"baby\"");
+	arr = jsonez_create_array(obj, (char *)"array");
+	
+	for (int i = 0; i < 10; ++i) {
+		jsonez_create_int(arr, arr->key, i);
+	}
 
-	free(string);
+	// let's try some nested objects...
+	obj = jsonez_create_object(root, (char *)"grunt");
+	jsonez_create_int(obj, (char *)"int", 42);
+	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_bool(obj, (char *)"bool", false);
+	jsonez_create_string(obj, (char *)"string", (char *)"Oh Yeah \"baby\"");
+	arr = jsonez_create_array(obj, (char *)"array");
+	
+	for (int i = 0; i < 10; ++i) {
+		jsonez_create_int(arr, arr->key, i);
+	}
 
-#endif
+	// let's try some nested objects...
+	obj = jsonez_create_object(root, (char *)"grunt");
+	jsonez_create_int(obj, (char *)"int", 42);
+	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_bool(obj, (char *)"bool", false);
+	jsonez_create_string(obj, (char *)"string", (char *)"Oh Yeah \"baby\"");
+	arr = jsonez_create_array(obj, (char *)"array");
+	
+	for (int i = 0; i < 10; ++i) {
+		jsonez_create_int(arr, arr->key, i);
+	}
+
+	// arrays of objects?
+	arr = jsonez_create_array(root, (char *)"crazy town");
+	jsonez_create_object(root, (char *)"empty");
+
+	arr = jsonez_create_array(root, (char *)"groovy");
+	obj = jsonez_create_object(arr, arr->key);
+	jsonez_create_int(obj, (char *)"int", 42);
+	jsonez_create_float(obj, (char *)"float", 123.456);
+	obj = jsonez_create_object(arr, arr->key);
+	jsonez_create_int(obj, (char *)"int", 42);
+	jsonez_create_float(obj, (char *)"float", 123.456);
+	obj = jsonez_create_object(arr, arr->key);
+	jsonez_create_int(obj, (char *)"int", 42);
+	jsonez_create_float(obj, (char *)"float", 123.456);
+
+
+	jsonez_free(root);
 
 	return NULL;
 }
@@ -798,25 +1115,32 @@ const char* testbox() {
 const char* all_tests() {
 
 	mu_suite_start();
-	mu_run_test(testbox);
+	//mu_run_test(testbox);
 
-	//mu_run_test(test_parse_011);
-	//mu_run_test(test_parse_010);
-	//mu_run_test(test_parse_009);
-	//mu_run_test(test_parse_008);
-	//mu_run_test(test_parse_007);
-	//mu_run_test(test_parse_006);
-	//mu_run_test(test_parse_005);
-	//mu_run_test(test_parse_004);
-	//mu_run_test(test_parse_003);
-	//mu_run_test(test_parse_002);
-	//mu_run_test(test_parse_001);
-	//mu_run_test(test_parse_empty_obj);
-	//mu_run_test(test_parse_empty_string);
-	//mu_run_test(test_create);
-	//mu_run_test(test_single_obj);
+	mu_run_test(test_parse_011);
+	mu_run_test(test_parse_010);
+	mu_run_test(test_parse_009);
+	mu_run_test(test_parse_008);
+	mu_run_test(test_parse_007);
+	mu_run_test(test_parse_006);
+	mu_run_test(test_parse_005);
+	mu_run_test(test_parse_004);
+	mu_run_test(test_parse_003);
+	mu_run_test(test_parse_002);
+	mu_run_test(test_parse_001);
+	mu_run_test(test_parse_empty_obj);
+	mu_run_test(test_parse_empty_string);
+	mu_run_test(test_create);
+	mu_run_test(test_single_obj);
 
 	return NULL;
 }
 
 RUN_TESTS(all_tests);	
+
+
+//int main(int argc, char *argv[]) {
+	////testbox();
+	////workit();
+	//return 0;
+//}
