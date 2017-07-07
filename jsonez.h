@@ -1,5 +1,5 @@
-/* jsonez.h v0.10 - public domain easy json parser - github url
-								no warranty implied; use at your own risk
+/* jsonez.h v0.20 - public domain easy json parser - github url
+						  no warranty implied; use at your own risk
 
 
    Do this:
@@ -12,10 +12,10 @@
    #define JSONEZ_IMPLEMENTATION
    #include "jsonez.h"
 
-	Full license at bottom of file.	
 
 	Latest revision history:
-		0.10 (2017-MO-DAY)	Initial Release	
+	   0.20 (2017-07-07)	Adding creation and output
+		0.10 (2017-03-14)	Initial Release	
 
 	See end of file for full revision history and license.
 
@@ -76,8 +76,20 @@ typedef struct jsonez_ctx {
 
 
 JSONEZDEF jsonez *jsonez_parse(char *file);
-JSONEZDEF jsonez *jsonez_find(jsonez *parent, const char *key);
 JSONEZDEF void jsonez_free(jsonez *json);
+JSONEZDEF jsonez *jsonez_find(jsonez *parent, const char *key);
+
+
+JSONEZDEF jsonez *jsonez_create_root();
+JSONEZDEF jsonez *jsonez_create_object(jsonez *parent, char *key);
+JSONEZDEF jsonez *jsonez_create_array(jsonez *parent, char *key);
+JSONEZDEF jsonez *jsonez_create_bool(jsonez *parent, char *key, bool value);
+JSONEZDEF jsonez *jsonez_create_float(jsonez *parent, char *key, double value);
+JSONEZDEF jsonez *jsonez_create_int(jsonez *parent, char *key, int value);
+JSONEZDEF jsonez *jsonez_create_string(jsonez *parent, char *key, char *value);
+
+
+JSONEZDEF char *jsonez_to_string(jsonez *root, jsonez_ctx *ctx = 0);
 
 
 #ifdef __cplusplus
@@ -119,7 +131,27 @@ JSONEZDEF void jsonez_free(jsonez *json);
 #define JSONEZ_IS_MULTI_COMMENT(p) (p && (*p) && (*p=='/') && (*(p+1)) && (*(p+1)=='*'))
 
 
+#define JSONEZ_WRITE_STRING(stf, fmt, ...) do { \
+	int written = snprintf(stf->ptr, stf->remaining, fmt, ##__VA_ARGS__); \
+	stf->total += written; \
+	if (stf->ptr) stf->ptr += written; \
+	stf->remaining -= written; \
+	if (stf->remaining < 0) stf->remaining = 0; \
+} while(0)
+
+
+typedef struct jsonez_output {
+
+	char *ptr;
+	int total = 0;
+	int remaining;
+
+} jsonez_output;
+
+
 static char *jsonez_parse_object(jsonez *parent, char *p);
+static void jsonez_print_key_value(jsonez_output *out, int space, jsonez *obj, jsonez_ctx *ctx);
+static void jsonez_print_value(jsonez_output *out, int space, jsonez *value, jsonez_ctx *ctx);
 
 
 static char *jsonez_skip_whitespace(char *p) {
@@ -614,12 +646,276 @@ JSONEZDEF jsonez *jsonez_find(jsonez *parent, const char *key) {
 }
 
 
+JSONEZDEF jsonez *jsonez_create_root() {
+
+	jsonez *obj = (jsonez *)calloc(1, sizeof(jsonez));
+	obj->type = JSON_OBJ;
+	return obj;
+
+}
+
+
+JSONEZDEF jsonez *jsonez_create_object(jsonez *parent, char *key) {
+
+	jsonez *obj = jsonez_create(parent, key);
+	obj->type = JSON_OBJ;
+	return obj;
+
+}
+
+
+JSONEZDEF jsonez *jsonez_create_array(jsonez *parent, char *key) {
+
+	jsonez *obj = jsonez_create(parent, key);
+	obj->type = JSON_ARRAY;
+	return obj;
+
+}
+
+
+JSONEZDEF jsonez *jsonez_create_bool(jsonez *parent, char *key, bool value) {
+
+	jsonez *obj = jsonez_create(parent, key);
+	obj->type = JSON_BOOL;
+	obj->i = value;
+	return obj;
+
+}
+
+
+JSONEZDEF jsonez *jsonez_create_float(jsonez *parent, char *key, double value) {
+
+	jsonez *obj = jsonez_create(parent, key);
+	obj->type = JSON_FLOAT;
+	obj->d = value;
+	return obj;
+
+}
+
+
+JSONEZDEF jsonez *jsonez_create_int(jsonez *parent, char *key, int value) {
+
+	jsonez *obj = jsonez_create(parent, key);
+	obj->type = JSON_INT;
+	obj->i = value;
+	return obj;
+
+}
+
+
+JSONEZDEF jsonez *jsonez_create_string(jsonez *parent, char *key, char *value) {
+
+	// this needs to unescape the string because
+	// reading the strings in escapes them
+	// why is this so hard?
+	jsonez *obj = jsonez_create(parent, key);
+	obj->type = JSON_STRING;
+	// count neede chars with escaping
+	int size = 0;
+	char *p = value;
+	while(*p) {
+		size++;
+		switch(*p) {
+			case '"':
+			case '\\':
+			case '\b':
+			case '\f':
+			case '\n':
+			case '\r':
+			case '\t':
+				size++;
+				break;
+		}	
+		p++;
+	}
+
+	obj->s = (char *)calloc(size + 1, sizeof(char));
+	p = value;
+	char *dest = obj->s;
+	while (*p) {
+		switch(*p) {
+			case '"':
+			case '\\':
+			case '\b':
+			case '\f':
+			case '\n':
+			case '\r':
+			case '\t':
+				*dest++ = '\\';
+				break;
+		}	
+		*dest++ = *p++;
+	}
+
+	obj->s[size] = '\0';
+	return obj;
+
+}
+
+
+static void jsonez_print_array_values(jsonez_output *out, int space, jsonez *obj, jsonez_ctx *ctx) {
+
+	JSONEZ_WRITE_STRING(out, " [");
+	jsonez *arr_obj = obj->child;
+	if (arr_obj) {
+		jsonez_print_value(out, space, arr_obj, ctx);
+		while(arr_obj->next) {
+			arr_obj = arr_obj->next;
+			JSONEZ_WRITE_STRING(out, ", ");
+			jsonez_print_value(out, space, arr_obj, ctx);
+		}
+	}
+	JSONEZ_WRITE_STRING(out, "]");
+}
+
+
+static void jsonez_print_object_values(jsonez_output *out, int space, jsonez *obj, jsonez_ctx *ctx) {
+	JSONEZ_WRITE_STRING(out, "{\n");
+	if (obj) {
+		jsonez *child = obj->child;
+		if (child) {
+			jsonez_print_key_value(out, space + ctx->indent_length, child, ctx);
+			while(child->next) {
+				JSONEZ_WRITE_STRING(out, ",\n");
+				child = child->next;
+				jsonez_print_key_value(out, space + ctx->indent_length, child, ctx);
+			}
+		}
+	}
+	JSONEZ_WRITE_STRING(out, "\n%*s}", space, "");
+}
+
+
+static bool jsonez_is_key_raw(char *key) {
+	while(key && *key) {
+		if (!JSONEZ_RAW_KEY(*key)) {
+			return false;
+		}
+		key++;
+	}
+	return true;
+}
+
+
+static void jsonez_write_key_value(jsonez_output *out, int space, jsonez *obj, jsonez_ctx *ctx) {
+	const char *separator = ctx->use_equal_sign ? " = " : ": ";
+	if (ctx->quote_keys || !jsonez_is_key_raw(obj->key)) {
+		JSONEZ_WRITE_STRING(out, "%*s\"%s\"%s", space, "", obj->key, separator);
+	} else {
+		JSONEZ_WRITE_STRING(out, "%*s%s%s", space, "", obj->key, separator);
+	}
+}
+
+
+
+//@TODO: something better than this
+static void jsonez_print_error(jsonez *obj) {
+	printf("ERROR!!!\n");
+}
+
+
+static void jsonez_print_key_value(jsonez_output *out, int space, jsonez *obj, jsonez_ctx *ctx) {
+	if(obj) {
+		switch(obj->type) {
+			case JSON_INT: {
+				jsonez_write_key_value(out, space, obj, ctx);
+				JSONEZ_WRITE_STRING(out, "%d", obj->i);
+			} break;
+			case JSON_FLOAT: {
+				jsonez_write_key_value(out, space, obj, ctx);
+				JSONEZ_WRITE_STRING(out, "%f", obj->d); 
+		   } break;
+			case JSON_STRING:{
+				jsonez_write_key_value(out, space, obj, ctx);
+		   	JSONEZ_WRITE_STRING(out, "\"%s\"", obj->s);
+			} break;
+			case JSON_BOOL: {
+				jsonez_write_key_value(out, space, obj, ctx);
+				JSONEZ_WRITE_STRING(out, "%s", obj->i ? "true" : "false"); 
+			} break;
+			case JSON_ARRAY: {
+				jsonez_write_key_value(out, space, obj, ctx);
+				jsonez_print_array_values(out, space, obj, ctx);
+		   } break;
+			case JSON_OBJ: {
+				jsonez_write_key_value(out, space, obj, ctx);
+			  	jsonez_print_object_values(out, space, obj, ctx);
+		   } break;
+			default: jsonez_print_error(obj); return;
+		}
+	}
+}
+
+
+static void jsonez_print_value(jsonez_output *out, int space, jsonez *value, jsonez_ctx *ctx) {
+	if(value) {
+		switch(value->type) {
+			case JSON_INT: JSONEZ_WRITE_STRING(out, "%d", value->i); break;
+			case JSON_FLOAT: JSONEZ_WRITE_STRING(out, "%f", value->d); break;
+			case JSON_STRING: JSONEZ_WRITE_STRING(out, "\"%s\"", value->s); break;
+			case JSON_BOOL: JSONEZ_WRITE_STRING(out, "%s", value->i ? "true" : "false"); break;
+			case JSON_ARRAY: jsonez_print_array_values(out, space, value, ctx); break;
+			case JSON_OBJ: jsonez_print_object_values(out, space, value, ctx); break;
+			default: jsonez_print_error(value); return;
+		}
+	}
+}
+
+
+static void jsonez_root_to_string(jsonez_output *out, jsonez *root, jsonez_ctx *ctx) {
+	jsonez *start = root->child;
+	if (ctx->add_root_object) JSONEZ_WRITE_STRING(out, "{\n");
+	if (start) {
+		int indent = ctx->add_root_object ? ctx->indent_length : 0;
+		jsonez_print_key_value(out, indent, start, ctx);
+		while(start->next) {
+			JSONEZ_WRITE_STRING(out, ",\n");
+			start = start->next;
+			jsonez_print_key_value(out, indent, start, ctx);
+		}
+	}
+	if (ctx->add_root_object) JSONEZ_WRITE_STRING(out, "\n}\n");
+}
+
+
+
+JSONEZDEF char *jsonez_to_string(jsonez *root, jsonez_ctx *ctx) {
+
+	jsonez_ctx default_ctx;
+	if (ctx == NULL) {
+		default_ctx.indent_length = 3;
+		default_ctx.add_root_object = true;
+		default_ctx.quote_keys = true;
+		default_ctx.use_equal_sign = false;
+		ctx = &default_ctx;
+	}
+
+	jsonez_output out;
+	out.total = 0;
+	out.ptr = NULL;
+	out.remaining = 0;
+
+	jsonez_root_to_string(&out, root, ctx);
+	char *string = (char *)calloc(out.total + 1, sizeof(char));
+
+	out.remaining = out.total;
+	out.total = 0;
+	out.ptr = string;
+	jsonez_root_to_string(&out, root, ctx);
+
+	string[out.total] = '\0';
+	return string;
+
+}
+
+
 #endif // JSONEZ_IMPLEMENTATION
 
 /*
 
 	revision history:
-		0.10 (2017-MO-DAY)	Initial Release	
+		0.20 (2017-07-07)	Adding creation and output
+		0.10 (2017-03-14)	Initial Release	
 
 	Public Domain (www.unlicense.org)
 	This is free and unencumbered software released into the public domain.
