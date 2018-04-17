@@ -1,4 +1,4 @@
-/* jsonez.h v0.20 - public domain easy json parser - github url
+/* jsonez.h v0.21 - public domain easy json parser - github url
 						  no warranty implied; use at your own risk
 
 
