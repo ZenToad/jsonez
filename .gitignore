@@ -1,0 +1,6 @@
+bin
+build
+tags
+CMakeLists.*
+vsdev
+*.bat

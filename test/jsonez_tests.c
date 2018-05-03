@@ -196,9 +196,9 @@ const char* test_parse_009() {
 
 	tmp = next->child;
 	mu_assert(tmp, "Should have a child");
-	mu_assert(tmp->type == JSON_INT, "Should be an string");
+	mu_assert(tmp->type == JSON_NUMBER, "Should be an string");
 	mu_assert(!strcmp(tmp->key,"s"), " wrong key name?");
-	mu_assert(tmp->i == 42, " wrong value");
+	mu_assert(tmp->n == 42, " wrong value");
 	mu_assert(!tmp->next, "should not be another one");
 
 	next = next->next;
@@ -279,9 +279,9 @@ const char* test_parse_008() {
 
 	tmp = next->child;
 	mu_assert(tmp, "Should have a child");
-	mu_assert(tmp->type == JSON_INT, "Should be an string");
+	mu_assert(tmp->type == JSON_NUMBER, "Should be an string");
 	mu_assert(!strcmp(tmp->key,"s"), " wrong key name?");
-	mu_assert(tmp->i == 42, " wrong value");
+	mu_assert(tmp->n == 42, " wrong value");
 	mu_assert(!tmp->next, "should not be another one");
 
 	next = next->next;
@@ -390,14 +390,14 @@ const char* test_parse_004() {
 	child = child->next;
 	mu_assert(child, "Should have a child");
 	mu_assert(!strcmp(child->key,"key1"), "wrong key");
-	mu_assert(child->type == JSON_INT, "Wrong type");
-	mu_assert(child->i == 42, "wrong value");
+	mu_assert(child->type == JSON_NUMBER, "Wrong type");
+	mu_assert(child->n == 42, "wrong value");
 
 	child = child->next;
 	mu_assert(child, "Should have a child");
 	mu_assert(!strcmp(child->key,"key2"), "wrong key");
-	mu_assert(child->type == JSON_FLOAT, "Wrong type");
-	mu_assert(child->d == 42.42, "wrong value");
+	mu_assert(child->type == JSON_NUMBER, "Wrong type");
+	mu_assert(child->n == 42.42, "wrong value");
 
 	child = child->next;
 	mu_assert(child, "Should have a child");
@@ -448,14 +448,14 @@ const char* test_parse_003() {
 	child = child->next;
 	mu_assert(child, "Should have a child");
 	mu_assert(!strcmp(child->key,"key1"), "wrong key");
-	mu_assert(child->type == JSON_INT, "Wrong type");
-	mu_assert(child->i == 42, "wrong value");
+	mu_assert(child->type == JSON_NUMBER, "Wrong type");
+	mu_assert(child->n == 42, "wrong value");
 
 	child = child->next;
 	mu_assert(child, "Should have a child");
 	mu_assert(!strcmp(child->key,"key2"), "wrong key");
-	mu_assert(child->type == JSON_FLOAT, "Wrong type");
-	mu_assert(child->d == 42.42, "wrong value");
+	mu_assert(child->type == JSON_NUMBER, "Wrong type");
+	mu_assert(child->n == 42.42, "wrong value");
 
 	child = child->next;
 	mu_assert(child, "Should have a child");
@@ -508,14 +508,14 @@ const char* test_parse_002() {
 	child = child->next;
 	mu_assert(child, "Should have a child");
 	mu_assert(!strcmp(child->key,"key1"), "wrong key");
-	mu_assert(child->type == JSON_INT, "Wrong type");
-	mu_assert(child->i == 42, "wrong value");
+	mu_assert(child->type == JSON_NUMBER, "Wrong type");
+	mu_assert(child->n == 42, "wrong value");
 
 	child = child->next;
 	mu_assert(child, "Should have a child");
 	mu_assert(!strcmp(child->key,"key2"), "wrong key");
-	mu_assert(child->type == JSON_FLOAT, "Wrong type");
-	mu_assert(child->d == 42.42, "wrong value");
+	mu_assert(child->type == JSON_NUMBER, "Wrong type");
+	mu_assert(child->n == 42.42, "wrong value");
 
 	child = child->next;
 	mu_assert(child, "Should have a child");
@@ -568,14 +568,14 @@ const char* test_parse_001() {
 	child = child->next;
 	mu_assert(child, "Should have a child");
 	mu_assert(!strcmp(child->key,"key1"), "wrong key");
-	mu_assert(child->type == JSON_INT, "Wrong type");
-	mu_assert(child->i == 42, "wrong value");
+	mu_assert(child->type == JSON_NUMBER, "Wrong type");
+	mu_assert(child->n == 42, "wrong value");
 
 	child = child->next;
 	mu_assert(child, "Should have a child");
 	mu_assert(!strcmp(child->key,"key2"), "wrong key");
-	mu_assert(child->type == JSON_FLOAT, "Wrong type");
-	mu_assert(child->d == 42.42, "wrong value");
+	mu_assert(child->type == JSON_NUMBER, "Wrong type");
+	mu_assert(child->n == 42.42, "wrong value");
 
 	child = child->next;
 	mu_assert(child, "Should have a child");
@@ -674,50 +674,50 @@ const char *workit() {
 
 	// simple way
 	jsonez *root = jsonez_create_root();
-	jsonez_create_int(root, (char *)"int", 42);
-	jsonez_create_float(root, (char *)"float", 123.456);
+	jsonez_create_numi(root, (char *)"int", 42);
+	jsonez_create_numf(root, (char *)"float", 123.456);
 	jsonez_create_bool(root, (char *)"bool", false);
 	jsonez_create_string(root, (char *)"string", (char *)"Oh Yeah \"baby\"");
 	jsonez *arr = jsonez_create_array(root, (char *)"array");
 
 	for (int i = 0; i < 10; ++i) {
-		jsonez_create_int(arr, arr->key, i);
+		jsonez_create_numi(arr, arr->key, i);
 	}
 
 	// let's try some nested objects...
 	jsonez *obj = jsonez_create_object(root, (char *)"grunt");
-	jsonez_create_int(obj, (char *)"int", 42);
-	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_numi(obj, (char *)"int", 42);
+	jsonez_create_numf(obj, (char *)"float", 123.456);
 	jsonez_create_bool(obj, (char *)"bool", false);
 	jsonez_create_string(obj, (char *)"string", (char *)"Oh Yeah \"baby\"");
 	arr = jsonez_create_array(obj, (char *)"array");
 	
 	for (int i = 0; i < 10; ++i) {
-		jsonez_create_int(arr, arr->key, i);
+		jsonez_create_numi(arr, arr->key, i);
 	}
 
 	// let's try some nested objects...
 	obj = jsonez_create_object(root, (char *)"grunt");
-	jsonez_create_int(obj, (char *)"int", 42);
-	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_numi(obj, (char *)"int", 42);
+	jsonez_create_numf(obj, (char *)"float", 123.456);
 	jsonez_create_bool(obj, (char *)"bool", false);
 	jsonez_create_string(obj, (char *)"string", (char *)"Oh Yeah \"baby\"");
 	arr = jsonez_create_array(obj, (char *)"array");
 	
 	for (int i = 0; i < 10; ++i) {
-		jsonez_create_int(arr, arr->key, i);
+		jsonez_create_numi(arr, arr->key, i);
 	}
 
 	// let's try some nested objects...
 	obj = jsonez_create_object(root, (char *)"grunt");
-	jsonez_create_int(obj, (char *)"int", 42);
-	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_numi(obj, (char *)"int", 42);
+	jsonez_create_numf(obj, (char *)"float", 123.456);
 	jsonez_create_bool(obj, (char *)"bool", false);
 	jsonez_create_string(obj, (char *)"string", (char *)"Oh Yeah \"baby\"");
 	arr = jsonez_create_array(obj, (char *)"array");
 	
 	for (int i = 0; i < 10; ++i) {
-		jsonez_create_int(arr, arr->key, i);
+		jsonez_create_numi(arr, arr->key, i);
 	}
 
 	// arrays of objects?
@@ -726,14 +726,14 @@ const char *workit() {
 
 	arr = jsonez_create_array(root, (char *)"groovy");
 	obj = jsonez_create_object(arr, arr->key);
-	jsonez_create_int(obj, (char *)"int", 42);
-	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_numi(obj, (char *)"int", 42);
+	jsonez_create_numf(obj, (char *)"float", 123.456);
 	obj = jsonez_create_object(arr, arr->key);
-	jsonez_create_int(obj, (char *)"int", 42);
-	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_numi(obj, (char *)"int", 42);
+	jsonez_create_numf(obj, (char *)"float", 123.456);
 	obj = jsonez_create_object(arr, arr->key);
-	jsonez_create_int(obj, (char *)"int", 42);
-	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_numi(obj, (char *)"int", 42);
+	jsonez_create_numf(obj, (char *)"float", 123.456);
 
 
 	jsonez_ctx ctx;
@@ -757,50 +757,50 @@ const char* testbox() {
 
 	// simple way
 	jsonez *root = jsonez_create_root();
-	jsonez_create_int(root, (char *)"int", 42);
-	jsonez_create_float(root, (char *)"float", 123.456);
+	jsonez_create_numi(root, (char *)"int", 42);
+	jsonez_create_numf(root, (char *)"float", 123.456);
 	jsonez_create_bool(root, (char *)"bool", false);
 	jsonez_create_string(root, (char *)"string", (char *)"Oh Yeah \"baby\"");
 	jsonez *arr = jsonez_create_array(root, (char *)"array");
 
 	for (int i = 0; i < 10; ++i) {
-		jsonez_create_int(arr, arr->key, i);
+		jsonez_create_numi(arr, arr->key, i);
 	}
 
 	// let's try some nested objects...
 	jsonez *obj = jsonez_create_object(root, (char *)"grunt");
-	jsonez_create_int(obj, (char *)"int", 42);
-	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_numi(obj, (char *)"int", 42);
+	jsonez_create_numf(obj, (char *)"float", 123.456);
 	jsonez_create_bool(obj, (char *)"bool", false);
 	jsonez_create_string(obj, (char *)"string", (char *)"Oh Yeah \"baby\"");
 	arr = jsonez_create_array(obj, (char *)"array");
 	
 	for (int i = 0; i < 10; ++i) {
-		jsonez_create_int(arr, arr->key, i);
+		jsonez_create_numi(arr, arr->key, i);
 	}
 
 	// let's try some nested objects...
 	obj = jsonez_create_object(root, (char *)"grunt");
-	jsonez_create_int(obj, (char *)"int", 42);
-	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_numi(obj, (char *)"int", 42);
+	jsonez_create_numf(obj, (char *)"float", 123.456);
 	jsonez_create_bool(obj, (char *)"bool", false);
 	jsonez_create_string(obj, (char *)"string", (char *)"Oh Yeah \"baby\"");
 	arr = jsonez_create_array(obj, (char *)"array");
 	
 	for (int i = 0; i < 10; ++i) {
-		jsonez_create_int(arr, arr->key, i);
+		jsonez_create_numi(arr, arr->key, i);
 	}
 
 	// let's try some nested objects...
 	obj = jsonez_create_object(root, (char *)"grunt");
-	jsonez_create_int(obj, (char *)"int", 42);
-	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_numi(obj, (char *)"int", 42);
+	jsonez_create_numf(obj, (char *)"float", 123.456);
 	jsonez_create_bool(obj, (char *)"bool", false);
 	jsonez_create_string(obj, (char *)"string", (char *)"Oh Yeah \"baby\"");
 	arr = jsonez_create_array(obj, (char *)"array");
 	
 	for (int i = 0; i < 10; ++i) {
-		jsonez_create_int(arr, arr->key, i);
+		jsonez_create_numi(arr, arr->key, i);
 	}
 
 	// arrays of objects?
@@ -809,14 +809,14 @@ const char* testbox() {
 
 	arr = jsonez_create_array(root, (char *)"groovy");
 	obj = jsonez_create_object(arr, arr->key);
-	jsonez_create_int(obj, (char *)"int", 42);
-	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_numi(obj, (char *)"int", 42);
+	jsonez_create_numf(obj, (char *)"float", 123.456);
 	obj = jsonez_create_object(arr, arr->key);
-	jsonez_create_int(obj, (char *)"int", 42);
-	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_numi(obj, (char *)"int", 42);
+	jsonez_create_numf(obj, (char *)"float", 123.456);
 	obj = jsonez_create_object(arr, arr->key);
-	jsonez_create_int(obj, (char *)"int", 42);
-	jsonez_create_float(obj, (char *)"float", 123.456);
+	jsonez_create_numi(obj, (char *)"int", 42);
+	jsonez_create_numf(obj, (char *)"float", 123.456);
 
 
 	jsonez_free(root);
@@ -828,7 +828,6 @@ const char* testbox() {
 const char* all_tests() {
 
 	mu_suite_start();
-	//mu_run_test(testbox);
 
 	mu_run_test(test_parse_011);
 	mu_run_test(test_parse_010);
@@ -852,8 +851,3 @@ const char* all_tests() {
 RUN_TESTS(all_tests);	
 
 
-//int main(int argc, char *argv[]) {
-	////testbox();
-	////workit();
-	//return 0;
-//}

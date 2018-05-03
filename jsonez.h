@@ -1,10 +1,11 @@
-/* jsonez.h v0.22 - public domain easy json parser - github url
+/* jsonez.h v0.21 - public domain easy json parser - github url
 						  no warranty implied; use at your own risk
 
 
    Do this:
       #define JSONEZ_IMPLEMENTATION
    before you include this file in *one* C or C++ file to create the implementation.
+
    // i.e. it should look like this:
    #include ...
    #include ...
@@ -14,6 +15,7 @@
 
 
 	Latest revision history:
+		0.21 (2018-04-06) Bunches of changes
 	   0.20 (2017-07-07)	Adding creation and output
 		0.10 (2017-03-14)	Initial Release	
 
@@ -28,6 +30,21 @@
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#ifndef bool
+typedef _Bool bool;
+#endif
+
+#ifndef false
+#define false 0
+#endif
+#ifndef true
+#define true 1
+#endif
+
+#ifndef nullptr
+#define nullptr 0
 #endif
 
 
@@ -48,8 +65,7 @@ typedef enum jsonez_type {
 	JSON_OBJ,
 	JSON_ARRAY,
 	JSON_STRING,
-	JSON_INT,
-	JSON_FLOAT,
+	JSON_NUMBER,
 	JSON_BOOL,
 } jsonez_type;
 
@@ -59,8 +75,8 @@ typedef struct jsonez {
 	char *key;
 	union {
 		char *s; // string 
-		int i; // int, boolean, or count
-		double d; // double 
+		int i; // boolean or count
+		double n; // number 
 	};
 	struct jsonez *next;
 	struct jsonez *child;
@@ -80,16 +96,19 @@ JSONEZDEF void jsonez_free(jsonez *json);
 JSONEZDEF jsonez *jsonez_find(jsonez *parent, const char *key);
 
 
+// TODO - can create some stuff without names to put in arrays
 JSONEZDEF jsonez *jsonez_create_root();
 JSONEZDEF jsonez *jsonez_create_object(jsonez *parent, char *key);
 JSONEZDEF jsonez *jsonez_create_array(jsonez *parent, char *key);
 JSONEZDEF jsonez *jsonez_create_bool(jsonez *parent, char *key, bool value);
-JSONEZDEF jsonez *jsonez_create_float(jsonez *parent, char *key, double value);
-JSONEZDEF jsonez *jsonez_create_int(jsonez *parent, char *key, int value);
+JSONEZDEF jsonez *jsonez_create_numd(jsonez *parent, char *key, double value);
+JSONEZDEF jsonez *jsonez_create_numf(jsonez *parent, char *key, float value);
+JSONEZDEF jsonez *jsonez_create_numi(jsonez *parent, char *key, int value);
 JSONEZDEF jsonez *jsonez_create_string(jsonez *parent, char *key, char *value);
 
 
-JSONEZDEF char *jsonez_to_string(jsonez *root, jsonez_ctx *ctx = 0);
+JSONEZDEF char *jsonez_to_string(jsonez *root, jsonez_ctx *ctx);
+JSONEZDEF void jsonez_free_string(char *string);
 
 
 #ifdef __cplusplus
@@ -143,7 +162,7 @@ JSONEZDEF char *jsonez_to_string(jsonez *root, jsonez_ctx *ctx = 0);
 typedef struct jsonez_output {
 
 	char *ptr;
-	int total = 0;
+	int total;
 	int remaining;
 
 } jsonez_output;
@@ -187,7 +206,9 @@ static jsonez *jsonez_create(jsonez *parent, char *key) {
 
 	jsonez *json = (jsonez *)calloc(1, sizeof(jsonez));
 	json->type = JSON_UNKNOWN;
-	json->key = key;
+	if (key) {
+		json->key = key;
+	}
 
 	if(!parent->child) {
 		parent->child = json;
@@ -419,18 +440,18 @@ static char *jsonez_parse_number_value(jsonez *parent, char *key, char *p) {
 	char *ee;
 	int i = strtol(s, &ee, 10);
 	if( errno == 0 && ((e+1) == ee) ) {
-		json->type = JSON_INT;
-		json->i = i;
+		json->type = JSON_NUMBER;
+		json->n = i;
 		return p;
 	}
 
 	// try to parse double
 	errno = 0;
 	ee = 0;
-	double d = strtod(s, &ee);
+	double n = strtod(s, &ee);
 	if(errno == 0 && ((e+1) == ee) ) {
-		json->type = JSON_FLOAT;
-		json->d = d;
+		json->type = JSON_NUMBER;
+		json->n = n;
 		return p;
 	}
 
@@ -605,8 +626,13 @@ JSONEZDEF void jsonez_free(jsonez *json) {
 JSONEZDEF jsonez *jsonez_parse(char *file) {
 
 	jsonez *json = (jsonez*)calloc(1, sizeof(jsonez));
-	
+
 	char *p = file;
+	if (p == 0 || strlen(p) == 0) {
+		json->type = JSON_OBJ;
+		return json;
+	}
+	
 	
 	p = jsonez_skip_whitespace(p);
 
@@ -631,10 +657,11 @@ JSONEZDEF jsonez *jsonez_parse(char *file) {
 
 
 JSONEZDEF jsonez *jsonez_find(jsonez *parent, const char *key) {
-	
-	if( !parent ) return NULL;
 
-	jsonez *next = parent->next;
+	if (parent == NULL)
+		return NULL;
+
+	jsonez *next = parent->child;
 	while(next) {
 		if(!strcmp(key, next->key)) {
 			return next;
@@ -683,21 +710,30 @@ JSONEZDEF jsonez *jsonez_create_bool(jsonez *parent, char *key, bool value) {
 }
 
 
-JSONEZDEF jsonez *jsonez_create_float(jsonez *parent, char *key, double value) {
+JSONEZDEF jsonez *jsonez_create_numd(jsonez *parent, char *key, double value) {
 
 	jsonez *obj = jsonez_create(parent, key);
-	obj->type = JSON_FLOAT;
-	obj->d = value;
+	obj->type = JSON_NUMBER;
+	obj->n = value;
+	return obj;
+
+}
+
+JSONEZDEF jsonez *jsonez_create_numf(jsonez *parent, char *key, float value) {
+
+	jsonez *obj = jsonez_create(parent, key);
+	obj->type = JSON_NUMBER;
+	obj->n = value;
 	return obj;
 
 }
 
 
-JSONEZDEF jsonez *jsonez_create_int(jsonez *parent, char *key, int value) {
+JSONEZDEF jsonez *jsonez_create_numi(jsonez *parent, char *key, int value) {
 
 	jsonez *obj = jsonez_create(parent, key);
-	obj->type = JSON_INT;
-	obj->i = value;
+	obj->type = JSON_NUMBER;
+	obj->n = value;
 	return obj;
 
 }
@@ -713,7 +749,7 @@ JSONEZDEF jsonez *jsonez_create_string(jsonez *parent, char *key, char *value) {
 	// count neede chars with escaping
 	int size = 0;
 	char *p = value;
-	while(*p) {
+	while(p && *p) {
 		size++;
 		switch(*p) {
 			case '"':
@@ -732,7 +768,7 @@ JSONEZDEF jsonez *jsonez_create_string(jsonez *parent, char *key, char *value) {
 	obj->s = (char *)calloc(size + 1, sizeof(char));
 	p = value;
 	char *dest = obj->s;
-	while (*p) {
+	while (p && *p) {
 		switch(*p) {
 			case '"':
 			case '\\':
@@ -817,13 +853,9 @@ static void jsonez_print_error(jsonez *obj) {
 static void jsonez_print_key_value(jsonez_output *out, int space, jsonez *obj, jsonez_ctx *ctx) {
 	if(obj) {
 		switch(obj->type) {
-			case JSON_INT: {
+			case JSON_NUMBER: {
 				jsonez_write_key_value(out, space, obj, ctx);
-				JSONEZ_WRITE_STRING(out, "%d", obj->i);
-			} break;
-			case JSON_FLOAT: {
-				jsonez_write_key_value(out, space, obj, ctx);
-				JSONEZ_WRITE_STRING(out, "%f", obj->d); 
+				JSONEZ_WRITE_STRING(out, "%f", obj->n); 
 		   } break;
 			case JSON_STRING:{
 				jsonez_write_key_value(out, space, obj, ctx);
@@ -850,8 +882,7 @@ static void jsonez_print_key_value(jsonez_output *out, int space, jsonez *obj, j
 static void jsonez_print_value(jsonez_output *out, int space, jsonez *value, jsonez_ctx *ctx) {
 	if(value) {
 		switch(value->type) {
-			case JSON_INT: JSONEZ_WRITE_STRING(out, "%d", value->i); break;
-			case JSON_FLOAT: JSONEZ_WRITE_STRING(out, "%f", value->d); break;
+			case JSON_NUMBER: JSONEZ_WRITE_STRING(out, "%f", value->n); break;
 			case JSON_STRING: JSONEZ_WRITE_STRING(out, "\"%s\"", value->s); break;
 			case JSON_BOOL: JSONEZ_WRITE_STRING(out, "%s", value->i ? "true" : "false"); break;
 			case JSON_ARRAY: jsonez_print_array_values(out, space, value, ctx); break;
@@ -875,6 +906,7 @@ static void jsonez_root_to_string(jsonez_output *out, jsonez *root, jsonez_ctx *
 		}
 	}
 	if (ctx->add_root_object) JSONEZ_WRITE_STRING(out, "\n}\n");
+	else JSONEZ_WRITE_STRING(out, "\n");
 }
 
 
@@ -909,12 +941,36 @@ JSONEZDEF char *jsonez_to_string(jsonez *root, jsonez_ctx *ctx) {
 }
 
 
+JSONEZDEF const char *jsonez_type_to_string(jsonez *obj) {
+
+	if (obj == nullptr) return "NULL_OBJ";
+
+	switch (obj->type) {
+		case JSON_OBJ: return "JSON_OBJ"; break;
+		case JSON_ARRAY: return "JSON_ARRAY"; break;
+		case JSON_STRING: return "JSON_STRING"; break;
+		case JSON_NUMBER: return "JSON_NUMBER"; break;
+		case JSON_BOOL: return "JSON_BOOL"; break;
+		default: return "UNKNOWN_TYPE";
+	}
+}
+
+
+JSONEZDEF void jsonez_free_string(char *string) {
+	free(string);
+}
+
+
 #endif // JSONEZ_IMPLEMENTATION
 
 /*
 
 	revision history:
-		0.20 (2017-07-07)	Adding creation and output
+		0.21 (2018-04-06) Bunches of changes
+		 - An empty file returns and empty node, not null
+		 - Changed float/int to just number
+		 - Passing a null pointer value as a string makes an empty string
+	   0.20 (2017-07-07)	Adding creation and output
 		0.10 (2017-03-14)	Initial Release	
 
 	Public Domain (www.unlicense.org)
