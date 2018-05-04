@@ -207,8 +207,8 @@ static jsonez *jsonez_create(jsonez *parent, char *key) {
 	jsonez *json = (jsonez *)calloc(1, sizeof(jsonez));
 	json->type = JSON_UNKNOWN;
 	if (key) {
-		json->key = key;
-	}
+		json->key = strdup(key);
+	} 
 
 	if(!parent->child) {
 		parent->child = json;
@@ -465,8 +465,8 @@ static char *jsonez_parse_string_value(jsonez *parent, char *key, char *p) {
 
 	jsonez *json = jsonez_create(parent, key);
 	p = jsonez_parse_quote_string(&json->s, p);
+	json->type = JSON_STRING;
 	if(p) {
-		json->type = JSON_STRING;
 		return p;
 	}
 
@@ -552,6 +552,7 @@ static char *jsonez_parse_object(jsonez *parent, char *p) {
 			p = jsonez_parse_array(child, p);
 		}
 
+		free(key);
 		p = jsonez_next_obj(p);
 		if(!p) return 0; // error?!?
 	}
@@ -597,6 +598,7 @@ static char *json_parse_root(jsonez *parent, char *p) {
 			p = jsonez_parse_array(child, p);
 		}
 
+		free(key);
 		p = jsonez_next_obj(p);
 		if(*p=='\0') {
 			parent->type = JSON_OBJ;
@@ -606,20 +608,31 @@ static char *json_parse_root(jsonez *parent, char *p) {
 	}
 
 	JSON_REPORT_ERROR("Syntax Error", p);
+	//@TODO - still need to free everything on error.
 	return 0; // error of some kind
 
 }
 
 
 JSONEZDEF void jsonez_free(jsonez *json) {
-	jsonez *p = json->child;
-	jsonez *p1;
-	while(p) {
-		p1 = p->next;
-		jsonez_free(p);
-		p = p1;
+
+	if (json) {
+
+		free(json->key);
+		if (json->type == JSON_STRING) {
+			free(json->s);
+		}
+
+		if (json->child) {
+			jsonez_free(json->child);
+		}
+
+		if (json->next) {
+			jsonez_free(json->next);
+		}
+		free (json);
 	}
-	free(json);
+
 }
 
 
@@ -636,22 +649,22 @@ JSONEZDEF jsonez *jsonez_parse(char *file) {
 	
 	p = jsonez_skip_whitespace(p);
 
+
 	if(*p=='{') {
 		p = jsonez_parse_object(json, p+1);
 	} else {
 		p = json_parse_root(json, p);	
 	}
 
+	
 	p = jsonez_skip_whitespace(p);
 
-	if(p && (*p == '\0')) {
-		json->type = JSON_OBJ;
-		return json;
-	} else {
+	if (!p) {
 		JSON_REPORT_ERROR("Unexpected end of file", p);
-		free(json);
-		return 0;
 	}
+
+	json->type = JSON_OBJ;
+	return json;
 
 }
 
