@@ -62,6 +62,7 @@ static int tests_run;
 #define JSONEZ_IMPLEMENTATION
 #include "../jsonez.h"
 
+#define STR(X) "##X"
 
 ////////////////////////////////////////////////////////////////////////////////
 // Testing stuff
@@ -86,17 +87,13 @@ const char *test_parse_011() {
 		k0 = { 
 		}, // comment
 	)";
-	size_t len = strlen(file);
-	char* buf = (char*)calloc(len+1, sizeof(char));
-	strncpy(buf, file, len);
-	buf[len] = '\0';
-	char* p = buf;
 
-	jsonez* json = jsonez_parse(p);
-	mu_assert(json == NULL, "Should get nothing back");
+	jsonez* json = jsonez_parse((char *)file);
+	mu_assert(json, "Should get something back");
+	mu_assert(json->type == JSON_OBJ, "Should be an object");
 
+	jsonez_free(json);
 	return NULL;
-
 
 }
  
@@ -121,16 +118,12 @@ const char *test_parse_010() {
 			v /*whas...*/:123, /* asdf */
 		}, // comment
 	)";
-	size_t len = strlen(file);
-	char* buf = (char*)calloc(len+1, sizeof(char));
-	strncpy(buf, file, len);
-	buf[len] = '\0';
-	char* p = buf;
 
-	jsonez* json = jsonez_parse(p);
+	jsonez* json = jsonez_parse((char *)file);
 	mu_assert(json, "Should get something back");
 	mu_assert(json->type == JSON_OBJ, "Should be an object");
 
+	jsonez_free(json);
 	return NULL;
 
 
@@ -150,13 +143,8 @@ const char* test_parse_009() {
 			}]
 		},
 	)";
-	size_t len = strlen(file);
-	char* buf = (char*)calloc(len+1, sizeof(char));
-	strncpy(buf, file, len);
-	buf[len] = '\0';
-	char* p = buf;
 
-	jsonez* json = jsonez_parse(p);
+	jsonez* json = jsonez_parse((char *)file);
 	mu_assert(json, "Should get something back");
 	mu_assert(json->type == JSON_OBJ, "Should be an object");
 
@@ -214,6 +202,7 @@ const char* test_parse_009() {
 	mu_assert(tmp->i == 0, " wrong value");
 	mu_assert(!tmp->next, "should not be another one");
 
+	jsonez_free(json);
 	return NULL;
 
 }
@@ -233,13 +222,8 @@ const char* test_parse_008() {
 			}]
 		},
 	)";
-	size_t len = strlen(file);
-	char* buf = (char*)calloc(len+1, sizeof(char));
-	strncpy(buf, file, len);
-	buf[len] = '\0';
-	char* p = buf;
 
-	jsonez* json = jsonez_parse(p);
+	jsonez* json = jsonez_parse((char *)file);
 	mu_assert(json, "Should get something back");
 	mu_assert(json->type == JSON_OBJ, "Should be an object");
 
@@ -297,6 +281,7 @@ const char* test_parse_008() {
 	mu_assert(tmp->i == 0, " wrong value");
 	mu_assert(!tmp->next, "should not be another one");
 
+	jsonez_free(json);
 	return NULL;
 
 }
@@ -306,16 +291,11 @@ const char* test_parse_007() {
 
 	const char* file = R"(k0:[{s:42}])";
 
-	size_t len = strlen(file);
-	char* buf = (char*)calloc(len+1, sizeof(char));
-	strncpy(buf, file, len);
-	buf[len] = '\0';
-	char* p = buf;
-
-	jsonez* json = jsonez_parse(p);
+	jsonez* json = jsonez_parse((char *)file);
 	mu_assert(json != 0, "should get back something");
 	mu_assert(json->type == JSON_OBJ, "?");
 
+	jsonez_free(json);
 	return NULL;
 
 }
@@ -323,13 +303,8 @@ const char* test_parse_007() {
 const char* test_parse_006() {
 
 	const char* file = R"(key:"value")";
-	size_t len = strlen(file);
-	char* buf = (char*)calloc(len+1, sizeof(char));
-	strncpy(buf, file, len);
-	buf[len] = '\0';
-	char* p = buf;
 
-	jsonez* json = jsonez_parse(p);
+	jsonez* json = jsonez_parse((char *)file);
 	mu_assert(json->type == JSON_OBJ, "should be an object");
 	mu_assert(json->i == 1, "should have only one");
 	jsonez* child = json->child;
@@ -337,6 +312,7 @@ const char* test_parse_006() {
 	mu_assert(child->type == JSON_STRING, "should be a stringz");
 	mu_assert(!strcmp(child->s, "value"), "should be value");
 
+	jsonez_free(json);
 	return NULL;
 }
 
@@ -346,14 +322,10 @@ const char* test_parse_005() {
 	const char* file = R"(
 		key:[]
 	)";
-	size_t len = strlen(file);
-	char* buf = (char*)calloc(len+1, sizeof(char));
-	strncpy(buf, file, len);
-	buf[len] = '\0';
-	char* p = buf;
 
-	jsonez* json = jsonez_parse(p);
+	jsonez* json = jsonez_parse((char *)file);
 	mu_assert(json, "WTF, over");
+	jsonez_free(json);
 
 	return NULL;
 
@@ -369,13 +341,8 @@ const char* test_parse_004() {
 		key3: true,
 		key4: false,	
 	)";
-	size_t len = strlen(file);
-	char* buf = (char*)calloc(len+1, sizeof(char));
-	strncpy(buf, file, len);
-	buf[len] = '\0';
-	char* p = buf;
 
-	jsonez* json = jsonez_parse(p);
+	jsonez* json = jsonez_parse((char *)file);
 	mu_assert(json, "should get something back");
 	mu_assert(json->type == JSON_OBJ, "Should be object");
 	mu_assert(json->key == 0, "Key should be empty");
@@ -413,6 +380,7 @@ const char* test_parse_004() {
 
 	mu_assert(child->next == 0, "Too many children");
 
+	jsonez_free(json);
 	return NULL;
 
 }
@@ -427,13 +395,8 @@ const char* test_parse_003() {
 		"key3": true,
 		"key4": false,	
 	)";
-	size_t len = strlen(file);
-	char* buf = (char*)calloc(len+1, sizeof(char));
-	strncpy(buf, file, len);
-	buf[len] = '\0';
-	char* p = buf;
 
-	jsonez* json = jsonez_parse(p);
+	jsonez* json = jsonez_parse((char *)file);
 	mu_assert(json, "should get something back");
 	mu_assert(json->type == JSON_OBJ, "Should be object");
 	mu_assert(json->key == 0, "Key should be empty");
@@ -471,6 +434,7 @@ const char* test_parse_003() {
 
 	mu_assert(child->next == 0, "Too many children");
 
+	jsonez_free(json);
 	return NULL;
 
 }
@@ -487,13 +451,8 @@ const char* test_parse_002() {
 			"key4": false,	
 		}		    
 	)";
-	size_t len = strlen(file);
-	char* buf = (char*)calloc(len+1, sizeof(char));
-	strncpy(buf, file, len);
-	buf[len] = '\0';
-	char* p = buf;
 
-	jsonez* json = jsonez_parse(p);
+	jsonez* json = jsonez_parse((char *)file);
 	mu_assert(json, "should get something back");
 	mu_assert(json->type == JSON_OBJ, "Should be object");
 	mu_assert(json->key == 0, "Key should be empty");
@@ -531,6 +490,7 @@ const char* test_parse_002() {
 
 	mu_assert(child->next == 0, "Too many children");
 
+	jsonez_free(json);
 	return NULL;
 
 }
@@ -547,13 +507,8 @@ const char* test_parse_001() {
 			key4: false,	
 		}		    
 	)";
-	size_t len = strlen(file);
-	char* buf = (char*)calloc(len+1, sizeof(char));
-	strncpy(buf, file, len);
-	buf[len] = '\0';
-	char* p = buf;
 
-	jsonez* json = jsonez_parse(p);
+	jsonez* json = jsonez_parse((char *)file);
 	mu_assert(json, "should get something back");
 	mu_assert(json->type == JSON_OBJ, "Should be object");
 	mu_assert(json->key == 0, "Key should be empty");
@@ -591,6 +546,7 @@ const char* test_parse_001() {
 
 	mu_assert(child->next == 0, "Too many children");
 
+	jsonez_free(json);
 	return NULL;
 
 }
@@ -600,9 +556,9 @@ const char *test_unexpected_eof_is_empty_object() {
 
    jsonez* json = jsonez_parse(" key:value, \
 	key2:");
-	/*mu_assert(json, "didn't work");*/
-	/*mu_assert(json->type == JSON_OBJ, "Isn't an object");*/
-	/*mu_assert(json->i == 0, "Not empty?");*/
+	mu_assert(json, "didn't work");
+	mu_assert(json->type == JSON_OBJ, "Isn't an object");
+	mu_assert(json->i == 0, "Not empty?");
 	jsonez_free(json);
 	return NULL;
 }
@@ -636,33 +592,24 @@ const char* test_parse_empty_string() {
 
 const char* test_parse_empty_obj() {
 
-	const char* file = R"(
-		{  }
-	)";
-	size_t len = strlen(file);
-	char* buf = (char*)calloc(len+1, sizeof(char));
-	strncpy(buf, file, len);
-	buf[len] = '\0';
-	char* p = buf;
+	const char *file = "{  }";
 
-	jsonez* json = jsonez_parse(p);
+	jsonez* json = jsonez_parse((char *)file);
 	mu_assert(json->type == JSON_OBJ, "Wrong type");
 	mu_assert(json->i == 0, "should not have children");
 	mu_assert(!json->key, "key should be empty");
-
+	jsonez_free(json);
 	return NULL;
 
 }
 
 
 const char* test_single_obj() {
-	const char* file = " \
-		{ \"key\":\"value\" } \
-	";
-	char* buf = (char*)calloc(strlen(file) + 1, sizeof(char));
-	strncpy(buf, file, strlen(file));
-	jsonez* json = jsonez_parse(buf);
-	free(buf);
+	const char *file = 
+		"{ \"key\":\"value\" }"
+
+	;
+	jsonez* json = jsonez_parse((char *)file);
 
 	mu_assert(json, "Failed to parse.");
 	mu_assert(json->type == JSON_OBJ, "Wrong type");
@@ -881,20 +828,19 @@ const char* all_tests() {
 	mu_run_test(test_parse_empty_string);
 	mu_run_test(test_parse_only_spaces);
 	mu_run_test(test_unexpected_eof_is_empty_object);
+	mu_run_test(test_parse_empty_obj);
 
-	/*mu_run_test(test_parse_empty_obj);*/
-	/*mu_run_test(test_parse_001);*/
-
-	/*mu_run_test(test_parse_002);*/
-	/*mu_run_test(test_parse_003);*/
-	/*mu_run_test(test_parse_004);*/
-	/*mu_run_test(test_parse_005);*/
-	/*mu_run_test(test_parse_006);*/
-	/*mu_run_test(test_parse_007);*/
-	/*mu_run_test(test_parse_008);*/
-	/*mu_run_test(test_parse_009);*/
-	/*mu_run_test(test_parse_010);*/
-	/*mu_run_test(test_parse_011);*/
+	mu_run_test(test_parse_001);
+	mu_run_test(test_parse_002);
+	mu_run_test(test_parse_003);
+	mu_run_test(test_parse_004);
+	mu_run_test(test_parse_005);
+	mu_run_test(test_parse_006);
+	mu_run_test(test_parse_007);
+	mu_run_test(test_parse_008);
+	mu_run_test(test_parse_009);
+	mu_run_test(test_parse_010);
+	mu_run_test(test_parse_011);
 
 	return NULL;
 }

@@ -1,4 +1,4 @@
-/* jsonez.h v0.21 - public domain easy json parser - github url
+/* jsonez.h v0.22 - public domain easy json parser - github url
 						  no warranty implied; use at your own risk
 
 
@@ -15,6 +15,7 @@
 
 
 	Latest revision history:
+		0.22 (2018-05-07) Fixed memory leak
 		0.21 (2018-04-06) Bunches of changes
 	   0.20 (2017-07-07)	Adding creation and output
 		0.10 (2017-03-14)	Initial Release	
@@ -530,11 +531,15 @@ static char *jsonez_parse_object(jsonez *parent, char *p) {
 			p = jsonez_parse_quote_string(&key, p);	
 		}
 
-		if(!p) {
-			return 0; // some kind of error
-		}
+		//if(!p) {
+			//return 0; // some kind of error
+		//}
 
 		p = jsonez_skip_key_separator(p);
+		if (!p) {
+			free(key);
+			return 0; // TODO: error
+		}
 			
 		if(*p=='t'||*p=='f') {
 			p = jsonez_parse_bool_value(parent, key, p);
@@ -577,10 +582,17 @@ static char *json_parse_root(jsonez *parent, char *p) {
 		}
 
 		if(!p) {
-			return 0; // some kind of error
+			JSON_REPORT_ERROR("Error parsing key", p);
+			free(key);
+			return 0; 
 		}
 
 		p = jsonez_skip_key_separator(p);
+		if (!p) {
+			JSON_REPORT_ERROR("Error parsing separator", p);
+			free(key);
+			return 0; 
+		}
 		
 		if(*p=='t'||*p=='f') {
 			p = jsonez_parse_bool_value(parent, key, p);
@@ -608,7 +620,6 @@ static char *json_parse_root(jsonez *parent, char *p) {
 	}
 
 	JSON_REPORT_ERROR("Syntax Error", p);
-	//@TODO - still need to free everything on error.
 	return 0; // error of some kind
 
 }
@@ -979,6 +990,10 @@ JSONEZDEF void jsonez_free_string(char *string) {
 /*
 
 	revision history:
+		0.22 (2018-05-07) Fixed memory leak
+		 - Used Valgrind to find some memory leaks
+		 - Updated the tests to remove memory leaks
+		 - Added some more tests
 		0.21 (2018-04-06) Bunches of changes
 		 - An empty file returns and empty node, not null
 		 - Changed float/int to just number
@@ -1006,4 +1021,4 @@ JSONEZDEF void jsonez_free_string(char *string) {
 	ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION 
 	WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
- */
+*/
