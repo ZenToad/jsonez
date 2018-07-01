@@ -15,6 +15,7 @@
 
 
 	Latest revision history:
+		0.23 (2018-07-01) Fixed '\/' escape sequence
 		0.22 (2018-05-07) Fixed memory leak
 		0.21 (2018-04-06) Bunches of changes
 	   0.20 (2017-07-07)	Adding creation and output
@@ -335,6 +336,9 @@ static char *jsonez_parse_quote_string(char **key, char *p) {
 					} break;
 					case 'f': {
 						*d++ = '\f';
+					} break;
+					case '/': {
+						*d++ = '/';
 					} break;
 					case 'n': {
 						*d++ = '\n';
@@ -990,6 +994,7 @@ JSONEZDEF void jsonez_free_string(char *string) {
 /*
 
 	revision history:
+		0.23 (2018-07-01) Fixed '\/' escape sequence
 		0.22 (2018-05-07) Fixed memory leak
 		 - Used Valgrind to find some memory leaks
 		 - Updated the tests to remove memory leaks
